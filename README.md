@@ -4,22 +4,25 @@ ConcurrenCey is a Ceylon library that makes it trivial to write concurrent, mult
 
 It is currently under active development. Please contact me if you would like to contribute!
 
-Here's a quick example of what code written with CeylonFX looks like *(this example already works)*:
+Here's a quick example of what code written with ConcurrenCey looks like:
 
 ```ceylon
-value firstLane = Lane("First lane");
-value secondLane = Lane("Second lane");
-
-Integer fact(Integer i) {
-	assert(i > 0);
-	if (i == 1) { return 1; }
-	else { return i * fact(i - 1); }
+shared void run() {
+	// run 2 actions in parallel
+	value runner = ActionRunner([
+		Action(() => expensiveComputation("World")),
+		Action(() => Resource(verySlow).useIt())]);
+	
+	// start and get the Promises containing the results
+	runner.run();
+	value results = runner.results();
+	
+	assert(exists results);
+	
+	// get the results, blocking if necessary until they are ready
+	assertEquals(results.first.get(), "Hello World");
+	assert(exists second = results[1], second.get() == allGood);
 }
-
-value factOf10 = Action(() => fact(10)).runOn(firstLane);
-value factOf12 = Action(() => fact(12)).runOn(secondLane);
-
-print("10! = ``factOf10.get()``, 12! = ``factOf12.get()``");
 ```
 
 ## Getting started
