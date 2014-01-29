@@ -4,7 +4,7 @@ import ceylon.test {
 
 import concurrencey {
 	Lane,
-	Promise,
+	WritablePromise,
 	TestWithLanes
 }
 
@@ -41,7 +41,7 @@ shared class ThreadLaneTest() extends TestWithLanes() {
 	shared test void canStopRunningLane() {
 		Lane lane2 = Lane("Lane2");
 		testingOn(lane2);
-		value promise = Promise<Boolean>();
+		value promise = WritablePromise<Boolean>();
 		object runnable satisfies Runnable {
 			shared actual void run() {
 				promise.set(true);
@@ -65,8 +65,8 @@ shared class ThreadLaneTest() extends TestWithLanes() {
 	shared test void canInterruptLane() {
 		Lane lane3 = Lane("Lane3");
 		testingOn(lane3);
-		value timeStarted = Promise<Integer>();
-		value timeInterrupted = Promise<Integer>();
+		value timeStarted = WritablePromise<Integer>();
+		value timeInterrupted = WritablePromise<Integer>();
 		value timeToSleep = 250;
 		object runnable satisfies Runnable {
 			shared actual void run() {
@@ -93,7 +93,7 @@ shared class ThreadLaneTest() extends TestWithLanes() {
 	shared test void laneCanBeRessurrected() {
 		Lane lane4 = Lane("Lane4");
 		testingOn(lane4);
-		value runs = Promise<Boolean>();
+		value runs = WritablePromise<Boolean>();
 		object runnable satisfies Runnable {
 			shared actual void run() {
 				runs.set(true);

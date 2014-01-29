@@ -4,26 +4,8 @@ ConcurrenCey is a Ceylon library that makes it trivial to write concurrent, mult
 
 It is currently under active development. Please contact me if you would like to contribute!
 
-Here's a quick example of what code written with ConcurrenCey looks like:
+Concurrencey provides low-level as well as higher level concurrency constructs so that you can choose what style to use in your code.
 
-```ceylon
-shared void run() {
-	// run 2 actions in parallel
-	value runner = ActionRunner([
-		Action(() => expensiveComputation("World")),
-		Action(() => Resource(verySlow).useIt())]);
-	
-	// start and get the Promises containing the results
-	runner.run();
-	value results = runner.results();
-	
-	assert(exists results);
-	
-	// get the results, blocking if necessary until they are ready
-	assertEquals(results.first.get(), "Hello World");
-	assert(exists second = results[1], second.get() == allGood);
-}
-```
 
 ## Getting started
 
@@ -31,5 +13,44 @@ You just need to add this declaration to your Ceylon module:
 
 ```ceylon
 import concurrencey "0.0.1"
+```
+
+## Parallel computation
+
+Run Actions in parallel using an `ActionRunner`:
+
+```ceylon
+function expensiveComputation() { ... }
+
+// create a runner that can run Actions using different strategies 
+value runner = ActionRunner([
+	Action(expensiveComputation),
+	Action(() => Resource(verySlow).useIt())],
+	unlimitedLanesStrategy); // use as many Lanes as needed
+
+value promises = runner.startAndGetPromises();
+
+// callback to run when expensiveComputation completes
+void handleResult(String|ComputationFailed result) {
+	switch(result)
+	case (is String) { print("Got a String ``result``"); }
+	case (is ComputationFailed) { print(result.exception); }
+}
+
+promises.first.onCompletion(handleResult);
+
+// can also get a result synchronously (blocking)
+assert(exists second = promises[1], second.get() == expectedResult);
+```
+
+You can also control directly how to run Actions in different Lanes:
+
+```ceylon
+value guiLane = Lane("GUI");
+value busLane = Lane("BUS");
+
+Action(createWindows).runOn(guiLane);
+value recordsPromise = Action(loadRecordsFromDB).runOn(busLane);
+recordsPromise.onCompletion(updateWindows);
 ```
 

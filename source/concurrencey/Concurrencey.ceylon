@@ -8,71 +8,111 @@ import java.lang {
 	Runnable
 }
 import java.util.concurrent {
-	LinkedBlockingDeque,
-	TimeUnit
+	CountDownLatch
 }
+import ceylon.collection { HashMap }
+import java.util.concurrent.atomic { AtomicInteger }
 
-"The result of a computation which either has not yet been started
- or has not completed successfully."
-abstract shared class ValueMissing(shared String reason)
-of ComputationNotStarted | ComputationFailed {}
-
-shared class ComputationNotStarted(String reason) extends ValueMissing(reason) {}
-
-shared class ComputationFailed(shared Exception exception)
-		extends ValueMissing(exception.message) {}
+"The result of a computation which has not completed successfully."
+shared class ComputationFailed(
+	shared Exception exception,
+	shared String reason = "") {}
 
 "A computation result destination"
 shared interface AcceptsValue<in Result> {
 	"Sets the result of a computation"
-	shared formal void set(Result|ValueMissing result);
+	shared formal void set(Result|ComputationFailed result);
 }
 
 "A computation result source"
 shared interface HasValue<out Result> {
-	"Returns the result of a computation, or [[ValueMissing]] if the
-	 computation has not started yet or not completed successfully"
-	shared formal Result|ValueMissing get();
+	"Returns the result of a computation, or [[ComputationFailed]] if the
+	 computation has not completed yet or not completed successfully."
+	shared formal Result|ComputationFailed get();
+	
+	"Returns true if this [[HasValue]] can provide a result immediately, false otherwise.
+	 
+	 If this method returns true, calling [[HasValue.get]] is guaranteed to return immediately.
+	 If not, calling [[HasValue.get]] will block until a value is available."
+	shared formal Boolean hasValue();
+}
+
+"A key which can be used to identify listeners, for example to retrieve or remove them."
+see(`interface AsyncHasValue`)
+shared interface ListenerId {
+	
+}
+
+class ListenerIdImpl(shared Integer key) satisfies ListenerId {}
+
+"A computation result which can be accessed asynchronously."
+shared interface AsyncHasValue<out Result> {
+	
+	"The given listener will be invoked on completion of the computation.
+	 Many listeners can be added.
+	 
+	 Returns a [[ListenerId]] which can be used to stop listening."
+	shared formal ListenerId onCompletion(Anything(Result|ComputationFailed) listener);
+	
+	"Make the given listener stop listening on the result of the computation.
+	 
+	 Returns true if and only if the listener was actually listening prior to this."
+	shared formal Boolean stopListening(ListenerId listenerId);
+	
 }
 
 "A Promise represents the future result of a computation which may or may not
  ever complete, and may complete successfully or fail."
-shared class Promise<Result>()
-		satisfies HasValue<Result>&AcceptsValue<Result> {
-	
-	value queue = LinkedBlockingDeque<Result|ValueMissing?>(1);
-	variable {Anything(Result|ValueMissing)*} listeners = {};
+shared alias Promise<out Result> => HasValue<Result>&AsyncHasValue<Result>; 
 
-	shared actual void set(Result|ValueMissing result) {
-		if (!queue.empty) {
-			queue.remove();
+"A Writable version of [[Promise]]. Should only be used by the code actually running
+ the computation. The Result of a computation should be set only once. Trying to set
+ the Result more than once will result in an [[Exception]] being thrown."
+shared class WritablePromise<Result>()
+		satisfies HasValue<Result>&AsyncHasValue<Result>&AcceptsValue<Result> {
+	
+	value listeners = HashMap<ListenerId, Anything(Result|ComputationFailed)>();
+	value listenerIdSource = AtomicInteger();
+	value latch = CountDownLatch(1);
+	late variable Result|ComputationFailed result;
+	
+	"Set the result of the computation. This method can be called only once,
+	 an Exception is thrown otherwise."
+	shared actual void set(Result|ComputationFailed result) {
+		if (latch.count == 1) {
+			this.result = result;
+			latch.countDown();
+			for (listener in listeners.values) {
+				listener(result);
+			}
+		} else {
+			throw Exception("The value of this WritablePromise has already been set");
 		}
-		queue.add(result);
 	}
 	
 	"Returns the result of an operation, blocking until the operation is
-	 completed if necessary."
-	shared actual Result|ValueMissing get() {
-		value item = queue.poll(1M, TimeUnit.\iDAYS);
-		if (exists item) {
-			queue.add(item);
-			return item;
+	 completed if necessary. To get the result asynchronously, use [[WritablePromise.onCompletion]]"
+	shared actual Result|ComputationFailed get() {
+		latch.await();
+		return result;
+	}
+	
+	shared actual Boolean hasValue() {
+		return latch.count < 1;
+	}
+	
+	shared actual ListenerId onCompletion(Anything(Result|ComputationFailed) listener) {
+		value listenerId = ListenerIdImpl(listenerIdSource.incrementAndGet());
+		if (hasValue()) {
+			listener(result);
+		} else {
+			listeners.put(listenerId, listener);
 		}
-		return ComputationFailed(Exception("Timeout while waiting for result"));
+		return listenerId;
 	}
 	
-	shared Boolean hasValue() {
-		return !queue.empty;
-	}
-	
-	shared void onCompletion(Anything(Result|ValueMissing) listener) {
-		listeners = listeners.chain({listener});
-	}
-	
-	shared Boolean stopListening(Anything(Result|ValueMissing) listener) {
-		value size = listeners.size;
-		listeners = listeners.filter((Anything(Result|ValueMissing) item) => item != listener);
-		return size > listeners.size;
+	shared actual Boolean stopListening(ListenerId listenerId) {
+		return (listeners.remove(listenerId) exists);
 	}
 	
 }
@@ -105,8 +145,8 @@ shared interface LaneRunnable<out Result> {
 shared class Action<out Result>(Result() act)
 		satisfies LaneRunnable<Result> {
 	
-	shared actual HasValue<Result> runOn(Lane lane) {
-		value promise = Promise<Result>();
+	shared actual Promise<Result> runOn(Lane lane) {
+		value promise = WritablePromise<Result>();
 		object runnable satisfies Runnable {
 			shared actual void run() {
 				try {
@@ -151,7 +191,7 @@ shared class LimitedLanesStrategy(shared Integer maximumLanes)
 	}
 	
 	Lane waitForFreeLane() {
-		value promise = Promise<Lane>();
+		value promise = WritablePromise<Lane>();
 		void receiveFreeLane(Lane lane) {
 			promise.set(lane);
 		}
@@ -167,7 +207,7 @@ shared class LimitedLanesStrategy(shared Integer maximumLanes)
 "A [[LaneStrategy]] which uses as many [[Lane]]s as necessary to run all provided
  [[Action]]s. Notice that it may not be faster to run a large number of Actions all
  in parallel because of the overhead of scheduling execution, for example."
-shared class UnlimitedLanesStrategy() satisfies LaneStrategy {
+shared object unlimitedLanesStrategy satisfies LaneStrategy {
 	
 	variable Integer count = 1;
 	String newLaneName => "no-limit-lanes-item-``count++``";
@@ -186,28 +226,19 @@ shared class UnlimitedLanesStrategy() satisfies LaneStrategy {
 }
 
 "This class can be used to run several [[Action]]s in parallel according to the
- provided [[LaneStrategy]]. The default LaneStrategy is [[UnlimitedLanesStrategy]]."
+ provided [[LaneStrategy]]. The default LaneStrategy is [[unlimitedLanesStrategy]]."
 shared class ActionRunner<out Element, out First, out Rest>(
 	Tuple<Action<Element>, First, Rest> actions,
-	LaneStrategy laneStrategy = UnlimitedLanesStrategy())
+	LaneStrategy laneStrategy = unlimitedLanesStrategy)
 		given First satisfies Action<Element>
 		given Rest satisfies Action<Element>[]
 {
 	
-	variable [HasValue<Element>+]? promises = null;
-	
-	"Start running all [[Action]]s using the provided [[LaneStrategy]]."
-	shared void run() {
-		promises = [ for (act in actions ) act.runOn(
+	"Returns [[Promise]]s which will capture the result of each [[Action]]."
+	shared [Promise<Element>+] startAndGetPromises() {
+		value promises = [ for (act in actions ) act.runOn(
 			laneStrategy.provideLaneFor(act)) ];
-	}
-	
-	"Returns [[Promise]]s with the result of each [[Action]]."
-	shared [HasValue<Element>+]? results() {
-		if (exists p = promises) {
-			return [ for (item in p) item ];
-		}
-		return null;
+		return [ for (item in promises) item ];
 	}
 	
 }
