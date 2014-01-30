@@ -4,4 +4,4 @@
 .ceylon
 .project
 .classpath
-.settings*
+.settings/*
