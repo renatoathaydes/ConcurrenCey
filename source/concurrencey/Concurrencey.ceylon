@@ -22,6 +22,9 @@ shared class ComputationFailed(
 	shared Exception exception,
 	shared String reason = "") {}
 
+shared class TimeoutException(shared actual String message = "")
+		extends Exception(message) {}
+
 "A computation result destination"
 shared interface AcceptsValue<in Result> {
 	"Sets the result of a computation"
@@ -148,6 +151,11 @@ shared interface LaneRunnable<out Result> {
 "An Action represents a computation which can be run in one or more [[Lane]]s."
 shared class Action<out Result>(Result() act)
 		satisfies LaneRunnable<Result> {
+	
+	"Run this action synchonously."
+	shared Result syncRun() {
+		return act();
+	}
 	
 	shared actual Promise<Result> runOn(Lane lane) {
 		value promise = WritablePromise<Result>();
