@@ -93,22 +93,30 @@ shared class ThreadLaneTest() extends TestWithLanes() {
 	shared test void laneCanBeRessurrected() {
 		Lane lane4 = Lane("Lane4");
 		testingOn(lane4);
-		value runs = WritablePromise<Boolean>();
+		value promise1 = WritablePromise<Boolean>();
+		value promise2 = WritablePromise<Boolean>();
+		
 		object runnable satisfies Runnable {
 			shared actual void run() {
-				runs.set(true);
+				promise1.set(true);
+			}
+		}
+		
+		object runnable2 satisfies Runnable {
+			shared actual void run() {
+				promise2.set(true);
 			}
 		}
 		
 		runSoonest(lane4, runnable);
 		
-		assert(runs.get() == true);
+		assert(promise1.get() == true);
 		
 		stop(lane4);
 		Thread.sleep(100);
-		runSoonest(lane4, runnable);
+		runSoonest(lane4, runnable2);
 		
-		assert(runs.get() == true);
+		assert(promise2.get() == true);
 	}
 	
 }
