@@ -18,8 +18,11 @@ import java.util.concurrent {
 	LinkedBlockingDeque,
 	TimeUnit
 }
+import java.util.concurrent.atomic {
+	AtomicBoolean
+}
 
-JMap<String, OnDemandThread|Null> threads = Collections.synchronizedMap(HashMap<String, OnDemandThread|Null>());
+JMap<String, OnDemandThread?> threads = Collections.synchronizedMap(HashMap<String, OnDemandThread?>());
 
 JList<Lane> busyLanes = Collections.synchronizedList(ArrayList<Lane>());
 
@@ -29,7 +32,7 @@ shared Boolean isLaneBusy(Lane lane) {
 	return busyLanes.contains(lane);
 }
 
-shared void listenForFreeLane(Anything(Lane) listener, {Lane*} fromLanes) {
+shared void captureNextFreedLane(Anything(Lane) listener, {Lane*} fromLanes) {
 	freeLaneListeners = freeLaneListeners.chain({ listener -> fromLanes });
 }
 
@@ -49,11 +52,11 @@ class OnDemandThread(shared Lane lane) {
 	
 	value queue = LinkedBlockingDeque<Runnable?>();
 	variable Boolean die = false;
-	variable Boolean running = false;
+	value running = AtomicBoolean(false);
 	
 	void loop() {
-		print("Started loop of Thread ``Thread.currentThread().name``");
-		while(true, !die) {
+		print("Started loop of Lane ``lane.name``");
+		while(!die) {
 			try {
 				value action = queue.poll(1M, TimeUnit.\iDAYS);
 				if (exists action) {
@@ -61,7 +64,7 @@ class OnDemandThread(shared Lane lane) {
 					action.run();
 				}
 			} catch (InterruptedException e) {
-				print("Thread ``lane.name`` interrupted");
+				print("Lane ``lane.name`` interrupted");
 			} finally {
 				if (queue.empty) {
 					busyLanes.remove(lane);
@@ -70,13 +73,12 @@ class OnDemandThread(shared Lane lane) {
 			}
 		}
 		threads.remove(lane.name);
-		running = false;
-		print("Thread ``lane.name`` dying");
+		running.set(false);
+		print("Thread for lane ``lane.name`` dying");
 	}
 	
 	object looper satisfies Runnable {
 		shared actual void run() {
-			running = true;
 			loop();
 		}
 	}
@@ -86,18 +88,19 @@ class OnDemandThread(shared Lane lane) {
 	
 	shared void runNext(Runnable toRun) {
 		die = false;
-		if (!running) {
+		if (running.compareAndSet(false, true)) {
 			thread.start();
 		}
 		queue.add(toRun);
 	}
 	
 	shared Boolean isRunning() {
-		return running;
+		return running.get();
 	}
 	
 	shared void done() {
 		die = true;
+		running.set(false);
 		thread.interrupt();
 	}
 	
@@ -122,14 +125,13 @@ shared Boolean isActive(Lane lane) {
 	return false;
 }
 
-shared Lane|[] currentLane() {
+shared Lane? currentLane() {
 	Thread currentThread = Thread.currentThread();
 	value onDemandThread = threads.get(currentThread.name);
 	if (exists onDemandThread, onDemandThread.thread === currentThread) {
 		return onDemandThread.lane;
-	} else {
-		return empty;
 	}
+	return null;
 }
 
 OnDemandThread initIfNecessary(Lane lane) {

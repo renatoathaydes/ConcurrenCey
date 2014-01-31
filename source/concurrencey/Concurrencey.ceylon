@@ -35,12 +35,12 @@ shared interface AcceptsValue<in Result> {
 shared interface HasValue<out Result> {
 	"Returns the result of a computation, or [[ComputationFailed]] if the
 	 computation has not completed yet or not completed successfully."
-	shared formal Result|ComputationFailed get();
+	shared formal Result|ComputationFailed syncGet();
 	
 	"Returns true if this [[HasValue]] can provide a result immediately, false otherwise.
 	 
-	 If this method returns true, calling [[HasValue.get]] is guaranteed to return immediately.
-	 If not, calling [[HasValue.get]] will block until a value is available."
+	 If this method returns true, calling [[HasValue.syncGet]] is guaranteed to return immediately.
+	 If not, calling [[HasValue.syncGet]] will block until a value is available."
 	shared formal Boolean hasValue();
 }
 
@@ -99,7 +99,7 @@ shared class WritablePromise<Result>()
 	
 	"Returns the result of an operation, blocking until the operation is
 	 completed if necessary. To get the result asynchronously, use [[WritablePromise.onCompletion]]"
-	shared actual Result|ComputationFailed get() {
+	shared actual Result|ComputationFailed syncGet() {
 		latch.await();
 		return result;
 	}
@@ -151,26 +151,56 @@ shared interface LaneRunnable<out Result> {
 "An Action represents a computation which can be run in one or more [[Lane]]s."
 shared class Action<out Result>(Result() act)
 		satisfies LaneRunnable<Result> {
+
+	variable value writablePromise = WritablePromise<Result>();
 	
-	"Run this action synchonously."
-	shared Result syncRun() {
-		return act();
+	"The Promise currently associated with this action. This is updated at each run."
+	shared Promise<Result> promise => writablePromise;
+	
+	void update(ComputationFailed|Result result) {
+		writablePromise.set(result);
+		writablePromise = WritablePromise<Result>();
 	}
 	
-	shared actual Promise<Result> runOn(Lane lane) {
-		value promise = WritablePromise<Result>();
+	"Run this action synchonously."
+	shared default Result syncRun() {
+		value result = act();
+		update(result);
+		return result;
+	}
+	
+	shared default actual Promise<Result> runOn(Lane lane) {
 		object runnable satisfies Runnable {
 			shared actual void run() {
 				try {
-					promise.set(act());
+					update(act());
 				} catch (e) {
 					e.printStackTrace();
-					promise.set(ComputationFailed(e));
+					update(ComputationFailed(e));
 				}
 			}
 		}
 		runSoonest(lane, runnable);
 		return promise;
+	}
+	
+}
+
+"A special kind of [[Action]] which is guaranteed to only run once at most."
+shared class OnceAction<out Result>(Result() act)
+extends Action<Result>(act) {
+	
+	shared variable Boolean canRun = true;
+	
+	"Run this action synchonously."
+	shared actual Result syncRun() {
+		canRun = false;
+		return super.syncRun();
+	}
+	
+	shared actual Promise<Result> runOn(Lane lane) {
+		canRun = false;
+		return super.runOn(lane);
 	}
 	
 }

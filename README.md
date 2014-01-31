@@ -23,12 +23,11 @@ Run Actions in parallel using an `ActionRunner`:
 function expensiveComputation() { ... }
 
 // create a runner that can run Actions using different strategies 
-value runner = ActionRunner([
-	Action(expensiveComputation),
-	Action(() => Resource(verySlow).useIt())],
-	unlimitedLanesStrategy); // use as many Lanes as needed
+value runner = StrategyActionRunner(unlimitedLanesStrategy);
 
-value promises = runner.startAndGetPromises();
+value promises = runner.runActions([
+	Action(expensiveComputation),
+	Action(() => Resource(verySlow).useIt())]);
 
 // callback to run when expensiveComputation completes
 void handleResult(String|ComputationFailed result) {
@@ -40,7 +39,7 @@ void handleResult(String|ComputationFailed result) {
 promises.first.onCompletion(handleResult);
 
 // can also get a result synchronously (blocking)
-assert(exists second = promises[1], second.get() == expectedResult);
+assert(exists second = promises[1], second.syncGet() == expectedResult);
 ```
 
 You can also control directly how to run Actions in different Lanes:

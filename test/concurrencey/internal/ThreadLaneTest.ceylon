@@ -5,12 +5,12 @@ import ceylon.test {
 import concurrencey {
 	Lane,
 	WritablePromise,
-	TestWithLanes
+	TestWithLanes,
+	sleep
 }
 
 import java.lang {
 	Runnable,
-	Thread,
 	InterruptedException
 }
 
@@ -23,7 +23,7 @@ shared class ThreadLaneTest() extends TestWithLanes() {
 		object runnable satisfies Runnable {
 			shared variable Boolean ran = false;
 			shared actual void run() {
-				Thread.sleep(sleepTime);
+				sleep(sleepTime);
 				ran = true;
 			}
 		}
@@ -32,7 +32,7 @@ shared class ThreadLaneTest() extends TestWithLanes() {
 		runSoonest(lane1, runnable);
 		value totalTime = system.milliseconds - startTime;
 		
-		Thread.sleep(sleepTime + 25);
+		sleep(sleepTime + 25);
 		
 		assert(runnable.ran);
 		assert(totalTime < sleepTime);
@@ -52,13 +52,13 @@ shared class ThreadLaneTest() extends TestWithLanes() {
 		
 		runSoonest(lane2, runnable);
 		
-		assert(promise.get() == true);
+		assert(promise.syncGet() == true);
 		assert(isActive(lane2));
 		
 		value isStopped = stop(lane2);
 		
 		assert(isStopped);
-		Thread.sleep(250);
+		sleep(250);
 		assert(!isActive(lane2));
 	}
 	
@@ -72,7 +72,7 @@ shared class ThreadLaneTest() extends TestWithLanes() {
 			shared actual void run() {
 				timeStarted.set(system.milliseconds);
 				try {
-					Thread.sleep(timeToSleep);
+					sleep(timeToSleep);
 				} catch(InterruptedException e) {
 					timeInterrupted.set(system.milliseconds);
 				}
@@ -80,12 +80,14 @@ shared class ThreadLaneTest() extends TestWithLanes() {
 		}
 		
 		runSoonest(lane3, runnable);
-		value startTime = timeStarted.get();
+		value startTime = timeStarted.syncGet();
 		assert(is Integer startTime);
 		
-		stop(lane3);
+		value confirmedStop = stop(lane3);
 		
-		value stopped = timeInterrupted.get();
+		assert(confirmedStop);
+		
+		value stopped = timeInterrupted.syncGet();
 		assert(is Integer stopped);
 		assert(stopped - startTime < timeToSleep);
 	}
@@ -110,13 +112,13 @@ shared class ThreadLaneTest() extends TestWithLanes() {
 		
 		runSoonest(lane4, runnable);
 		
-		assert(promise1.get() == true);
+		assert(promise1.syncGet() == true);
 		
 		stop(lane4);
-		Thread.sleep(100);
+		sleep(100);
 		runSoonest(lane4, runnable2);
 		
-		assert(promise2.get() == true);
+		assert(promise2.syncGet() == true);
 	}
 	
 }

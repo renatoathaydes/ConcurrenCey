@@ -1,3 +1,7 @@
+import concurrencey.internal {
+	internalCurrentLane=currentLane
+}
+
 import java.lang {
 	Thread
 }
@@ -43,7 +47,7 @@ shared void waitUntil(
 	value conditionPromise = Action(condition).runOn(Lane("waitUntil-lane"));
 	while (true) {
 		if (conditionPromise.hasValue()) {
-			value result = conditionPromise.get();
+			value result = conditionPromise.syncGet();
 			if (is ComputationFailed result) {
 				throw result.exception;
 			} else if (result == true) {
@@ -55,4 +59,11 @@ shared void waitUntil(
 		}
 		sleep(pollingTime);
 	}
+}
+
+"Returns the [[Lane]] where the caller is running from.
+ 
+ May return null if the caller is not running on an existing Lane."
+shared Lane? currentLane() {
+	return internalCurrentLane();
 }

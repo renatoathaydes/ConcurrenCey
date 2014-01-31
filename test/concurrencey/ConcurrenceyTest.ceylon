@@ -19,7 +19,7 @@ shared class ConcurrenceyTest() extends TestWithLanes() {
 		
 		value actionResult = Action(() => currentLane()).runOn(lane);
 		
-		value result = actionResult.get();
+		value result = actionResult.syncGet();
 		assert(is Lane result, result === lane);
 	}
 	
@@ -33,29 +33,8 @@ shared class ConcurrenceyTest() extends TestWithLanes() {
 		
 		value actionResult = Action(() => hi("Hi")).runOn(lane);
 		
-		value result = actionResult.get();
+		value result = actionResult.syncGet();
 		assert(result == "Hi");
-	}
-	
-	shared test void canRunActionsInParallel() {
-		value sleepTime = 100;
-		String slowString(String s) {
-			Thread.sleep(sleepTime);
-			return s;
-		}
-		value actions = ActionRunner(
-			[Action(() => slowString("A")),
-			Action(() => slowString("B")),
-			Action(() => slowString("C")),
-			Action(() => slowString("D")),
-			Action(() => 1)]);
-		
-		value time_result = withTimer(() => actions.startAndGetPromises());
-		
-		assert(2 * sleepTime > time_result.first);
-		value resultPromises = time_result[1];
-		value results = [ for (item in resultPromises) if (is String|Integer obj = item.get()) obj ];
-		assertEquals(results, ["A", "B", "C", "D", 1]);
 	}
 	
 }
@@ -65,16 +44,16 @@ shared class PromiseTest() {
 	shared test void promiseCanProvideResultSynchronously() {
 		value promise = WritablePromise<String>();
 		promise.set("Hi");
-		assertEquals("Hi", promise.get());
+		assertEquals("Hi", promise.syncGet());
 	}
 	
 	shared test void promiseCanProvideResultSynchronouslyWhenValueIsSetLater() {
 		value promise = WritablePromise<String>();
-		value resultPromise = Action(() => promise.get()).runOn(Lane("test-lane-1"));
+		value resultPromise = Action(() => promise.syncGet()).runOn(Lane("test-lane-1"));
 		Thread.sleep(50);
 		Action(() => promise.set("Hi")).runOn(Lane("test-lane-2"));
 		
-		value result = resultPromise.get();
+		value result = resultPromise.syncGet();
 		assertEquals("Hi", result);
 	}
 	

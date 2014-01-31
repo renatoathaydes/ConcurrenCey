@@ -5,11 +5,11 @@ import ceylon.test { assertEquals }
 
 "Run the module `concurrencey`."
 shared void run() {
-	value runner = ActionRunner([
-	Action(() => example("World")),
-	Action(() => true)]);
+	value runner = StrategyActionRunner();
 	
-	value promises = runner.startAndGetPromises();
+	value promises = runner.runActions([
+		Action(() => example("World")),
+		Action(() => true)]);
 	
 	void checkResult(String|Boolean|ComputationFailed result) {
 		switch(result)
@@ -20,14 +20,14 @@ shared void run() {
 	
 	promises.first.onCompletion(checkResult);
 	
-	assertEquals(promises.first.get(), "Hello World");
-	assert(exists second = promises[1], second.get() == true);
+	assertEquals(promises.first.syncGet(), "Hello World");
+	assert(exists second = promises[1], second.syncGet() == true);
 	
 	value guiLane = Lane("GUI");
 	value busLane = Lane("BUS");
 	Action(updateWindows).runOn(guiLane);
 	value recordsPromise = Action(loadRecordsFromDB).runOn(busLane);
-	print(recordsPromise.get());
+	print(recordsPromise.syncGet());
 	
 }
 
