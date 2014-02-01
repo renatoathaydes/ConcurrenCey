@@ -124,9 +124,9 @@ shared class WritablePromise<Result>()
 	
 }
 
-"A Lane represents a Thread where [[Action]]s may run. The mapping is not 1-1,
- which means that a Lane might discard previously used Threads and start a new
- one in order to save resources, or re-use an idle Thread for efficiency."
+"A Lane represents a Thread where [[Action]]s may run. A Lane is not exactly the
+ same as a Java Thread. A Lane might discard its current Thread if it has been long
+ idle, for example, and start a new one only when necessary."
 shared class Lane(shared String name) {
 	
 	shared Boolean busy => isLaneBusy(this);

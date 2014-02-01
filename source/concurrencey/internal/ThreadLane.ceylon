@@ -1,3 +1,8 @@
+import ceylon.collection {
+	LinkedList,
+	HashMap
+}
+
 import concurrencey {
 	Lane
 }
@@ -12,7 +17,7 @@ import java.util {
 	ArrayList,
 	JList=List,
 	JMap=Map,
-	HashMap
+	JHMap=HashMap
 }
 import java.util.concurrent {
 	LinkedBlockingDeque,
@@ -22,11 +27,15 @@ import java.util.concurrent.atomic {
 	AtomicBoolean
 }
 
-JMap<String, OnDemandThread?> threads = Collections.synchronizedMap(HashMap<String, OnDemandThread?>());
+alias LaneWaiters => HashMap<Lane, LinkedList<Lane>>;
+
+JMap<String, OnDemandThread?> threads = Collections.synchronizedMap(JHMap<String, OnDemandThread?>());
 
 JList<Lane> busyLanes = Collections.synchronizedList(ArrayList<Lane>());
 
 variable {<Anything(Lane)->{Lane*}>*} freeLaneListeners = {};
+
+LaneWaiters freeLaneWaiters = HashMap<Lane, LinkedList<Lane>>();
 
 shared Boolean isLaneBusy(Lane lane) {
 	return busyLanes.contains(lane);
@@ -34,6 +43,10 @@ shared Boolean isLaneBusy(Lane lane) {
 
 shared void captureNextFreedLane(Anything(Lane) listener, {Lane*} fromLanes) {
 	freeLaneListeners = freeLaneListeners.chain({ listener -> fromLanes });
+}
+
+shared void returnLaneWhenFree(Lane lane, LinkedList<Lane> freeLanes) {
+	freeLaneWaiters.put(lane, freeLanes);
 }
 
 void notifyLaneListeners(Lane lane) {
@@ -69,6 +82,9 @@ class OnDemandThread(shared Lane lane) {
 				if (queue.empty) {
 					busyLanes.remove(lane);
 					notifyLaneListeners(lane);
+					if (exists waiter = freeLaneWaiters[lane]) {
+						waiter.add(lane);
+					}
 				}
 			}
 		}
