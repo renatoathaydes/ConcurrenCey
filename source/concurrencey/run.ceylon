@@ -1,6 +1,3 @@
-import ceylon.test { assertEquals }
-
-
 
 
 "Run the module `concurrencey`."
@@ -20,14 +17,15 @@ shared void run() {
 	
 	promises.first.onCompletion(checkResult);
 	
-	assertEquals(promises.first.syncGet(), "Hello World");
-	assert(exists second = promises[1], second.syncGet() == true);
+	assert(exists second = promises[1]);
+	
+	// sychronously waiting for a value - useful on tests, but blocking can be bad!
+	waitUntil(() => second.getOrNoValue() == true);
 	
 	value guiLane = Lane("GUI");
 	value busLane = Lane("BUS");
 	Action(updateWindows).runOn(guiLane);
-	value recordsPromise = Action(loadRecordsFromDB).runOn(busLane);
-	print(recordsPromise.syncGet());
+	Action(loadRecordsFromDB).runOn(busLane);
 	
 }
 

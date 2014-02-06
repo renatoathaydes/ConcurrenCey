@@ -1,6 +1,6 @@
 import ceylon.test { test, assertThatException }
 
-shared class FunctionsTest() {
+class FunctionsTest() {
 
 	shared test void runWithTimerTest() {
 		value result1 = withTimer(() => sleep(50));

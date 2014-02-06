@@ -1,64 +1,57 @@
 import ceylon.test {
 	test,
-	assertEquals
+	assertEquals,
+	assertThatException
 }
 
 import concurrencey.internal {
 	currentLane
 }
 
-import java.lang {
-	Thread
-}
-
-shared class ConcurrenceyTest() extends TestWithLanes() {
+class ConcurrenceyTest() {
+	
+	value lane = Lane(`class ConcurrenceyTest`.name);
 	
 	shared test void canRunActionInAnotherLane() {
-		value lane = Lane("Lane");
-		testingOn(lane);
+		value promise = Action(() => currentLane()).runOn(lane);
+		waitUntil(() => promise.getOrNoValue() is Lane, 2000);
+		value result = promise.getOrNoValue();
 		
-		value actionResult = Action(() => currentLane()).runOn(lane);
-		
-		value result = actionResult.syncGet();
-		assert(is Lane result, result === lane);
+		assert(is Lane result);
+		assertEquals(result, lane);
 	}
 	
 	shared test void canRunActionWithArgsInAnotherLane() {
-		value lane = Lane("Lane B");
-		testingOn(lane);
-		
 		String hi(String s) {
 			return s;
 		}
 		
-		value actionResult = Action(() => hi("Hi")).runOn(lane);
+		value promise = Action(() => hi("Hi")).runOn(lane);
+		waitUntil(() => promise.getOrNoValue() is String, 2000);
+		value result = promise.getOrNoValue();
 		
-		value result = actionResult.syncGet();
 		assert(result == "Hi");
 	}
 	
 }
 
-shared class PromiseTest() {
+class WritableOncePromiseTest() {
 	
-	shared test void promiseCanProvideResultSynchronously() {
-		value promise = WritablePromise<String>();
+	value promise = WritableOncePromise<String>();
+	
+	shared test void canProvideResultImmediately() {
 		promise.set("Hi");
-		assertEquals("Hi", promise.syncGet());
+		assertEquals(promise.getOrNoValue(), "Hi");
 	}
 	
-	shared test void promiseCanProvideResultSynchronouslyWhenValueIsSetLater() {
-		value promise = WritablePromise<String>();
-		value resultPromise = Action(() => promise.syncGet()).runOn(Lane("test-lane-1"));
-		Thread.sleep(50);
-		Action(() => promise.set("Hi")).runOn(Lane("test-lane-2"));
+	shared test void canProvideResultManyTimesAfterSet() {
+		promise.set("Hi");
+		assertEquals(promise.getOrNoValue(), "Hi");
+		assertEquals(promise.getOrNoValue(), "Hi");
+		assertEquals(promise.getOrNoValue(), "Hi");
+	}
 		
-		value result = resultPromise.syncGet();
-		assertEquals("Hi", result);
-	}
-	
-	shared test void promiseCanProvideResultAsync() {
-		value promise = WritablePromise<String>();
+	shared test void canProvideResultAsyncWhenValueIsSetEarlier() {
 		promise.set("Hi");
 		variable Anything capture = null;
 		promise.onCompletion((String|ComputationFailed s) => capture = s);
@@ -66,8 +59,7 @@ shared class PromiseTest() {
 		assertEquals("Hi", result);
 	}
 	
-	shared test void promiseCanProvideResultAsyncWhenValueIsSetLater() {
-		value promise = WritablePromise<String>();
+	shared test void canProvideResultAsyncWhenValueIsSetLater() {
 		variable Anything capture = null;
 		function doCapture(String|ComputationFailed s) {
 			capture = s;
@@ -82,7 +74,6 @@ shared class PromiseTest() {
 	}
 	
 	shared test void moreThanOneListenerCanBeAdded() {
-		value promise = WritablePromise<String>();
 		variable Anything capture1 = null;
 		variable Anything capture2 = null;
 		variable Anything capture3 = null;
@@ -99,11 +90,10 @@ shared class PromiseTest() {
 	}
 	
 	shared test void listenerCanBeRemoved() {
-		value promise = WritablePromise<String>();
 		variable Anything capture1 = null;
 		variable Anything capture2 = null;
 		
-		value id =promise.onCompletion((String|ComputationFailed s) => capture1 = s);
+		value id = promise.onCompletion((String|ComputationFailed s) => capture1 = s);
 		promise.onCompletion((String|ComputationFailed s) => capture2 = s);
 		value ok = promise.stopListening(id);
 		promise.set("Hi");
@@ -112,6 +102,11 @@ shared class PromiseTest() {
 		assert(capture1 is Null);
 		assert(exists c = capture2);
 		assertEquals(c, "Hi");
+	}
+	
+	shared test void cannotBeSetMoreThanOnce() {
+		promise.set("Hi");
+		assertThatException(() => promise.set("Hej")).hasType(`Exception`);
 	}
 	
 }

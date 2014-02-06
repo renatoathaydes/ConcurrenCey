@@ -38,11 +38,11 @@ void handleResult(String|ComputationFailed result) {
 
 promises.first.onCompletion(handleResult);
 
-// can also get a result synchronously (blocking)
-assert(exists second = promises[1], second.syncGet() == expectedResult);
+// can also get results synchronously (blocking!)
+value results = runner.runActionsAndWait( ... );
 ```
 
-You can also control directly how to run Actions in different Lanes:
+You may control directly how to run Actions in different Lanes:
 
 ```ceylon
 value guiLane = Lane("GUI");

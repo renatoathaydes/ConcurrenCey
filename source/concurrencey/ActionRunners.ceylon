@@ -1,24 +1,101 @@
 import ceylon.collection {
 	LinkedList
 }
+import ceylon.language {
+	shared,
+	default,
+	Tuple,
+	variable,
+	formal,
+	actual
+}
 
+import concurrencey {
+	Promise,
+	ComputationFailed
+}
 import concurrencey.internal {
 	returnLaneWhenFree
 }
 
-"[[Action]] runners are able to run Actions. Although Actions 'know' how to run themselves,
- it is often very useful to separate the logic required to orchestrate execution of Actions from
- the logic in which actions are actually dispatched."
-shared interface ActionRunner {
+
+import java.util.concurrent {
+	CountDownLatch
+}
+
+"[[Action]] runners are able to run Actions. Although Actions 'know' how to run,
+ it is often very useful to separate the logic required to orchestrate execution
+ of Actions from the logic in which actions are actually dispatched."
+shared abstract class ActionRunner() {
 	
+	"Runs the given [[Action]]s, possibly asynchrounously and in parallel,
+	 returning a [[Promise]] which can be used to retrieve the result of
+	 each Action."
 	shared default [Promise<Element>+] runActions<Element, First, Rest>(
-		Tuple<Action<Element>, First, Rest> actions)
-			given First satisfies Action<Element>
-			given Rest satisfies Action<Element>[] {
+		Tuple<ActionBase<Element>, First, Rest> actions)
+			given First satisfies ActionBase<Element>
+			given Rest satisfies ActionBase<Element>[] {
 		return [for (act in actions) run(act) ];
 	}
 	
-	shared formal Promise<Element> run<Element>(Action<Element> action);
+	"Runs the given [[Action]]s, possibly in parallel, and block until all
+	 Actions have completed, returning [[Promise]]s which can be used to retrieve the result of
+	 each Action.
+	 
+	 The order of the returned Promises matches the order the given Actions (the order in which
+	 the Actions are completed is not considered), except if several computations fail, in which
+	 case, although the order of successfull results is maintained, the order of failures is not."
+	shared default [Element|ComputationFailed*] runActionsAndWait<Element, First, Rest>(
+		Tuple<ActionBase<Element>, First, Rest> actions)
+			given First satisfies ActionBase<Element>
+			given Rest satisfies ActionBase<Element>[] {
+		value latch = CountDownLatch(actions.size);
+		
+		value collector = Array<Element|ComputationFailed?>({null}.repeat(actions.size));
+		
+		void captureResult([Integer, Element]|[Integer, ComputationFailed] result) {
+			collector.set(result.first, result[1]);
+			latch.countDown();
+		}
+		
+		for (id -> act in entries(actions)) {
+			run(IdAction(id, () => [id, act.syncRun()]))
+					.onCompletion(captureResult);
+		}
+		
+		latch.await();
+		
+		return collector.coalesced.sequence;
+	}
+	
+	"Runs the given [[Action]], possibly in parallel, and block until it has completed.
+	 The returned [[Promise]]s can be used to retrieve the result of the Action."
+	shared default Element|ComputationFailed runAndWait<Element>(ActionBase<Element> action) {
+		value latch = CountDownLatch(1);
+		
+		variable Element|ComputationFailed|NoValue result = noValue;
+		
+		void captureResult(Element|ComputationFailed toCapture) {
+			result = toCapture;
+			latch.countDown();
+		}
+		
+		run(action).onCompletion(captureResult);
+		
+		latch.await();
+		
+		if (is Element|ComputationFailed final = result) {
+			return final;
+		}
+		
+		throw;
+	}
+	
+	"Runs the given [[Action]], possibly asynchrounously, returning a
+	 [[Promise]] which can be used to retrieve the result of the Action."
+	shared formal Promise<Element, Failure> run<out Element, out Failure=ComputationFailed>(
+		ActionBase<Element, Failure> action)
+			given Failure satisfies Object;
 	
 }
 
@@ -26,46 +103,25 @@ shared interface ActionRunner {
  the provided [[LaneStrategy]]."
 shared class StrategyActionRunner(
 	shared LaneStrategy laneStrategy = UnlimitedLanesStrategy())
-		satisfies ActionRunner {
+		extends ActionRunner() {
 	
-	shared actual Promise<Element> run<Element>(Action<Element> action) =>
+	shared actual Promise<Element, Failure> run<out Element, out Failure=ComputationFailed>(
+		ActionBase<Element, Failure> action)
+			given Failure satisfies Object =>
 			action.runOn(laneStrategy.provideLaneFor(action));
 	
 }
 
-object laneIdGenerator {
-	
-	variable Integer laneCounter = 0;
-	Lane laneProviderSyncLane = Lane("lane-provider-sync-lane");
-	
-	String laneId(Object+ cls) =>
-		 "-".join({ for (c in cls) c.string }.chain({ (laneCounter++).string }));
-	
-	shared String generateId(Object+ cls) {
-		value id = Action(() => laneId(*cls)).runOn(laneProviderSyncLane).syncGet();
-		switch(id)
-		case (is String) {
-			return id;
-		}
-		case (is ComputationFailed) {
-			throw Exception("Could not generate ID for Lane", id.exception);
-		}
-	}
-	
-}
-
-String(Object+) generateId => laneIdGenerator.generateId;
-
 "A strategy for allocating [[Lane]]s to [[Action]]s."
 shared interface LaneStrategy {
 	"Provides a [[Lane]] for the given [[Action]]."
-	shared formal Lane provideLaneFor(Action<Anything> action);
+	shared formal Lane provideLaneFor(ActionBase<Anything, Object> action);
 }
 
 "A [[LaneStrategy]] which always uses a single [[Lane]] to run all [[Action]]s."
 shared class SingleLaneStrategy() satisfies LaneStrategy {
-	value lane = Lane(generateId("single-lane-strategy"));
-	provideLaneFor(Action<Anything> action) => lane;
+	value lane = Lane("single-lane-strategy");
+	provideLaneFor(ActionBase<Anything, Object> action) => lane;
 }
 
 "A [[LaneStrategy]] which only uses the provided number of [[Lane]]s to run [[Action]]s.
@@ -76,7 +132,7 @@ shared class LimitedLanesStrategy(shared Integer maximumLanes)
 		satisfies LaneStrategy {
 	
 	value initialLanes = LinkedList({ for (i in 1..maximumLanes) Lane(
-		generateId("limited-lanes", i)) });
+		"limited-lanes-``i``") });
 	
 	value lanes = LinkedList(initialLanes);
 	
@@ -92,7 +148,7 @@ shared class LimitedLanesStrategy(shared Integer maximumLanes)
 	Lane nextVirginOrFreeLane() =>
 			virginLane() else nextLane() else waitForFreeLane();
 	
-	shared actual Lane provideLaneFor(Action<Anything> action) {
+	shared actual Lane provideLaneFor(ActionBase<Anything, Object> action) {
 		value lane = nextVirginOrFreeLane();
 		returnLaneWhenFree(lane, lanes);
 		return lane;
@@ -108,11 +164,11 @@ shared class UnlimitedLanesStrategy() satisfies LaneStrategy {
 	
 	value lanes = LinkedList<Lane>();
 	
-	Lane newLane() => Lane(generateId("no-limit-lanes"));
+	Lane newLane() => Lane("no-limit-lanes");
 	
 	Lane nextFreeLaneOrNewOne() => lanes.removeFirst() else newLane();
 	
-	shared actual Lane provideLaneFor(Action<Anything> action) {
+	shared actual Lane provideLaneFor(ActionBase<Anything, Object> action) {
 		value lane = nextFreeLaneOrNewOne();
 		returnLaneWhenFree(lane, lanes);
 		return lane;

@@ -3,22 +3,21 @@ import ceylon.test {
 }
 
 import concurrencey {
-	Lane,
-	WritablePromise,
-	TestWithLanes,
-	sleep
+	WritableOncePromise,
+	sleep,
+	waitUntil, Lane
 }
+
 
 import java.lang {
 	Runnable,
 	InterruptedException
 }
 
-shared class ThreadLaneTest() extends TestWithLanes() {
+class ThreadLaneTest() {
 	
 	shared test void canRunInLane() {
-		Lane lane1 = Lane("Lane1");
-		testingOn(lane1);
+		value lane1 = Lane("Lane1");
 		value sleepTime = 150;
 		object runnable satisfies Runnable {
 			shared variable Boolean ran = false;
@@ -40,8 +39,7 @@ shared class ThreadLaneTest() extends TestWithLanes() {
 	
 	shared test void canStopRunningLane() {
 		Lane lane2 = Lane("Lane2");
-		testingOn(lane2);
-		value promise = WritablePromise<Boolean>();
+		value promise = WritableOncePromise<Boolean>();
 		object runnable satisfies Runnable {
 			shared actual void run() {
 				promise.set(true);
@@ -52,7 +50,7 @@ shared class ThreadLaneTest() extends TestWithLanes() {
 		
 		runSoonest(lane2, runnable);
 		
-		assert(promise.syncGet() == true);
+		waitUntil(() => promise.getOrNoValue() == true, 2000);
 		assert(isActive(lane2));
 		
 		value isStopped = stop(lane2);
@@ -64,9 +62,8 @@ shared class ThreadLaneTest() extends TestWithLanes() {
 	
 	shared test void canInterruptLane() {
 		Lane lane3 = Lane("Lane3");
-		testingOn(lane3);
-		value timeStarted = WritablePromise<Integer>();
-		value timeInterrupted = WritablePromise<Integer>();
+		value timeStarted = WritableOncePromise<Integer>();
+		value timeInterrupted = WritableOncePromise<Integer>();
 		value timeToSleep = 250;
 		object runnable satisfies Runnable {
 			shared actual void run() {
@@ -80,23 +77,24 @@ shared class ThreadLaneTest() extends TestWithLanes() {
 		}
 		
 		runSoonest(lane3, runnable);
-		value startTime = timeStarted.syncGet();
+		waitUntil(() => timeStarted.getOrNoValue() is Integer, 2000);
+		value startTime = timeStarted.getOrNoValue();
 		assert(is Integer startTime);
 		
 		value confirmedStop = stop(lane3);
 		
 		assert(confirmedStop);
 		
-		value stopped = timeInterrupted.syncGet();
+		waitUntil(() => timeInterrupted.getOrNoValue() is Integer, 2000);
+		value stopped = timeInterrupted.getOrNoValue();
 		assert(is Integer stopped);
 		assert(stopped - startTime < timeToSleep);
 	}
 	
 	shared test void laneCanBeRessurrected() {
 		Lane lane4 = Lane("Lane4");
-		testingOn(lane4);
-		value promise1 = WritablePromise<Boolean>();
-		value promise2 = WritablePromise<Boolean>();
+		value promise1 = WritableOncePromise<Boolean>();
+		value promise2 = WritableOncePromise<Boolean>();
 		
 		object runnable satisfies Runnable {
 			shared actual void run() {
@@ -112,13 +110,13 @@ shared class ThreadLaneTest() extends TestWithLanes() {
 		
 		runSoonest(lane4, runnable);
 		
-		assert(promise1.syncGet() == true);
+		waitUntil(() => promise1.getOrNoValue() == true, 2000);
 		
 		stop(lane4);
 		sleep(100);
 		runSoonest(lane4, runnable2);
 		
-		assert(promise2.syncGet() == true);
+		waitUntil(() => promise2.getOrNoValue() == true, 2000);
 	}
 	
 }

@@ -6,6 +6,7 @@ import java.lang {
 	Thread
 }
 
+
 "Causes the currently executing thread to sleep (temporarily cease execution)
  for the specified number of milliseconds, subject to the precision and accuracy
  of system timers and schedulers.
@@ -36,6 +37,8 @@ shared [Integer, Result] withTimer<Result>(Result()|Action<Result> act) {
 	return [endTime - startTime, result];
 }
 
+ActionRunner waiter = StrategyActionRunner();
+
 "Waits until the given condition is true, within a timeout."
 throws(`class TimeoutException`, "when the timeout is reached.")
 shared void waitUntil(
@@ -43,21 +46,24 @@ shared void waitUntil(
 	Integer timeoutInMillis = 30_000,
 	Integer pollingTime = 10) {
 	
-	Integer timeoutTime = system.milliseconds + timeoutInMillis;
-	value conditionPromise = Action(condition).runOn(Lane("waitUntil-lane"));
-	while (true) {
-		if (conditionPromise.hasValue()) {
-			value result = conditionPromise.syncGet();
-			if (is ComputationFailed result) {
-				throw result.exception;
-			} else if (result == true) {
-				return;
-			}
+	value timeoutTime = system.milliseconds + timeoutInMillis;
+	variable Boolean satisfied = false;
+	while (!satisfied) {
+		value result = waiter.runAndWait(Action(condition));
+		switch(result)
+		case (is Boolean) {
+			satisfied = result;
 		}
-		if (system.milliseconds > timeoutTime) {
+		case (is ComputationFailed) {
+			throw result.exception;
+		}
+		value now = system.milliseconds;
+		if (now >= timeoutTime) {
 			throw TimeoutException("Condition was not met within ``timeoutInMillis`` ms");
 		}
-		sleep(pollingTime);
+		if (!satisfied) {
+			sleep(min({ pollingTime, timeoutTime - now }));
+		}
 	}
 }
 

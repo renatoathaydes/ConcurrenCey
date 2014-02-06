@@ -3,9 +3,7 @@ import ceylon.collection {
 	HashMap
 }
 
-import concurrencey {
-	Lane
-}
+
 
 import java.lang {
 	Runnable,
@@ -26,6 +24,7 @@ import java.util.concurrent {
 import java.util.concurrent.atomic {
 	AtomicBoolean
 }
+import concurrencey { Lane }
 
 alias LaneWaiters => HashMap<Lane, LinkedList<Lane>>;
 
@@ -33,32 +32,14 @@ JMap<String, OnDemandThread?> threads = Collections.synchronizedMap(JHMap<String
 
 JList<Lane> busyLanes = Collections.synchronizedList(ArrayList<Lane>());
 
-variable {<Anything(Lane)->{Lane*}>*} freeLaneListeners = {};
-
 LaneWaiters freeLaneWaiters = HashMap<Lane, LinkedList<Lane>>();
 
 shared Boolean isLaneBusy(Lane lane) {
 	return busyLanes.contains(lane);
 }
 
-shared void captureNextFreedLane(Anything(Lane) listener, {Lane*} fromLanes) {
-	freeLaneListeners = freeLaneListeners.chain({ listener -> fromLanes });
-}
-
 shared void returnLaneWhenFree(Lane lane, LinkedList<Lane> freeLanes) {
 	freeLaneWaiters.put(lane, freeLanes);
-}
-
-void notifyLaneListeners(Lane lane) {
-	value laneListeners = freeLaneListeners
-			.filter((Anything(Lane)->{Lane*} entry) =>
-			lane in entry.item);
-	for (listener in laneListeners) {
-		value notifyFree = listener.key;
-		notifyFree(lane);
-	}
-	freeLaneListeners = freeLaneListeners
-			.filter((Anything(Lane)->{Lane*} item) => item in laneListeners);
 }
 
 class OnDemandThread(shared Lane lane) {
@@ -68,7 +49,7 @@ class OnDemandThread(shared Lane lane) {
 	value running = AtomicBoolean(false);
 	
 	void loop() {
-		print("Started loop of Lane ``lane.name``");
+		print("Started loop of Lane ``lane.id``");
 		while(!die) {
 			try {
 				value action = queue.poll(1M, TimeUnit.\iDAYS);
@@ -77,20 +58,21 @@ class OnDemandThread(shared Lane lane) {
 					action.run();
 				}
 			} catch (InterruptedException e) {
-				print("Lane ``lane.name`` interrupted");
+				print("Lane ``lane.id`` interrupted");
+			} catch (e) {
+				e.printStackTrace();
 			} finally {
 				if (queue.empty) {
 					busyLanes.remove(lane);
-					notifyLaneListeners(lane);
 					if (exists waiter = freeLaneWaiters[lane]) {
 						waiter.add(lane);
 					}
 				}
 			}
 		}
-		threads.remove(lane.name);
+		threads.remove(lane.id);
 		running.set(false);
-		print("Thread for lane ``lane.name`` dying");
+		print("Thread for lane ``lane.id`` dying");
 	}
 	
 	object looper satisfies Runnable {
@@ -99,7 +81,7 @@ class OnDemandThread(shared Lane lane) {
 		}
 	}
 	
-	shared Thread thread = Thread(looper, lane.name);
+	shared Thread thread = Thread(looper, lane.id);
 	thread.daemon = true;
 	
 	shared void runNext(Runnable toRun) {
@@ -127,7 +109,7 @@ shared void runSoonest(Lane lane, Runnable runnable) {
 }
 
 shared Boolean stop(Lane lane) {
-	if (exists thread = threads.get(lane.name)) {
+	if (exists thread = threads.get(lane.id)) {
 		thread.done();
 		return true;
 	}
@@ -135,7 +117,7 @@ shared Boolean stop(Lane lane) {
 }
 
 shared Boolean isActive(Lane lane) {
-	if (exists thread = threads.get(lane.name)) {
+	if (exists thread = threads.get(lane.id)) {
 		return thread.isRunning();
 	}
 	return false;
@@ -151,8 +133,8 @@ shared Lane? currentLane() {
 }
 
 OnDemandThread initIfNecessary(Lane lane) {
-	OnDemandThread thread = threads.get(lane.name) else OnDemandThread(lane);
-	threads.put(lane.name, thread);
+	OnDemandThread thread = threads.get(lane.id) else OnDemandThread(lane);
+	threads.put(lane.id, thread);
 	return thread;
 }
 

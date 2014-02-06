@@ -1,67 +1,91 @@
+import ceylon.collection {
+	HashSet
+}
 import ceylon.test {
 	assertEquals,
 	test
 }
-import java.util { Random }
-import ceylon.collection { HashSet }
 
-shared class ActionRunnerTest() {
+import concurrencey.internal {
+	generateLaneId
+}
+
+import java.util {
+	Random
+}
+
+class ActionRunnerTest() {
 	
 	value sleepTime = 100;
 	
 	String slowString(String s) {
+		print("Slow string with ``s``");
 		sleep(sleepTime);
 		return s;
 	}
-	
-	shared test void canRunActionsUsingUnlimitedLanesStrategy() {
-		value runner = StrategyActionRunner(UnlimitedLanesStrategy());
-		
-		function runAll() {
-			value promises = runner.runActions([
-			Action(() => slowString("A")),
-			Action(() => slowString("B")),
-			Action(() => slowString("C")),
-			Action(() => slowString("D")),
-			Action(() => 1)]);
-			return [for (p in promises) p.syncGet()];
-		}
-		
-		value time_result = withTimer(runAll);
-		
-		assert(sleepTime <= time_result.first < 2 * sleepTime);
-		value results = time_result[1];
-		assertEquals(results, ["A", "B", "C", "D", 1]);
-	}
-	
+
 	shared test void canRunActionsSynchronouslyUsingSingleLaneStrategy() {
 		value runner = StrategyActionRunner(SingleLaneStrategy());
 		
 		function runAll() {
-			value promises = runner.runActions([
+			value results = runner.runActionsAndWait([
 			Action(() => slowString("A")),
 			Action(() => slowString("B")),
 			Action(() => slowString("C"))]);
-			return [for (p in promises) p.syncGet()];
+			return results;
 		}
 		
 		value time_result = withTimer(runAll);
 		
 		assert(3 * sleepTime <= time_result.first < 4 * sleepTime);
 		value results = time_result[1];
-		assertEquals(results, ["A", "B", "C"]);
+		assertElementsEqual(results, { "A", "B", "C" });
+	}
+	
+	shared test void singleLaneStrategyEnsuresActionsRunSynchronously() {
+		value runner = StrategyActionRunner(SingleLaneStrategy());
+		value times = Array({0, 0, 0, 0, 0});
+		
+		runner.runActionsAndWait([
+		Action(() => times.set(0, system.milliseconds)),
+		Action(() => times.set(1, system.milliseconds)),
+		Action(() => times.set(2, system.milliseconds)),
+		Action(() => times.set(3, system.milliseconds)),
+		Action(() => times.set(4, system.milliseconds))
+		]);
+		assertElementsEqual(times, times.sort(byIncreasing((Integer t) => t)));
+	}
+	
+	shared test void canRunActionsUsingUnlimitedLanesStrategy() {
+		value runner = StrategyActionRunner(UnlimitedLanesStrategy());
+		
+		function runAll() {
+			value results = runner.runActionsAndWait([
+			Action(() => slowString("A")),
+			Action(() => slowString("B")),
+			Action(() => slowString("C")),
+			Action(() => slowString("D")),
+			Action(() => 1), Action(() => 2), Action(() => 3)]);
+			return results;
+		}
+		
+		value time_result = withTimer(runAll);
+		
+		assert(sleepTime <= time_result.first < 2 * sleepTime);
+		value results = time_result[1];
+		assertElementsEqual(results, { "A", "B", "C", "D", 1, 2, 3 });
 	}
 	
 	shared test void canRunActionsUsingLimitedLaneStrategy() {
 		value runner = StrategyActionRunner(LimitedLanesStrategy(2));
 		
 		function runAll() {
-			value promises = runner.runActions([
+			value results = runner.runActionsAndWait([
 			Action(() => slowString("A")),
 			Action(() => slowString("B")),
 			Action(() => slowString("C")),
 			Action(() => slowString("D"))]);
-			return [for (p in promises) p.syncGet()];
+			return results;
 		}
 		
 		value time_result = withTimer(runAll);
@@ -69,25 +93,25 @@ shared class ActionRunnerTest() {
 		
 		assert(2 * sleepTime <= time_result.first < 3 * sleepTime);
 		value results = time_result[1];
-		assertEquals(results, ["A", "B", "C", "D"]);
+		assertElementsEqual(results, { "A", "B", "C", "D" });
 	}
 	
 }
 
-shared class LaneIdProviderTest() {
-	
-	shared test void generatesExpectedIds() {
-		assertEquals(laneIdGenerator.generateId("abc")[0..3], "abc-");
-		assertEquals(laneIdGenerator.generateId("lane", 1)[0..6], "lane-1-");
-		assertEquals(laneIdGenerator.generateId("lane", 2, 3)[0..8], "lane-2-3-");
-	}
+class LaneIdProviderTest() {
 	
 	shared test void generatedIdsAreUnique() {
 		value random = Random();
 		value randomIds = (1..1000)
-				.map((Anything _) => random.nextInt(10))
-				.map(laneIdGenerator.generateId);
+				.map((Anything _) => random.nextInt(10).string)
+				.map(generateLaneId);
 		assertEquals(HashSet(randomIds).size, randomIds.size);
 	}
 	
+}
+
+shared void assertElementsEqual({Object*} iterable1, {Object*} iterable2) {
+	if (iterable1.sequence != iterable2.sequence) {
+		throw AssertionException("``iterable1`` != ``iterable2``");
+	}
 }
