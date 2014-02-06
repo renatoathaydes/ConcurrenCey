@@ -1,39 +1,9 @@
 import ceylon.test {
-	test,
 	assertEquals,
+	test,
 	assertThatException
 }
 
-import concurrencey.internal {
-	currentLane
-}
-
-class ConcurrenceyTest() {
-	
-	value lane = Lane(`class ConcurrenceyTest`.name);
-	
-	shared test void canRunActionInAnotherLane() {
-		value promise = Action(() => currentLane()).runOn(lane);
-		waitUntil(() => promise.getOrNoValue() is Lane, 2000);
-		value result = promise.getOrNoValue();
-		
-		assert(is Lane result);
-		assertEquals(result, lane);
-	}
-	
-	shared test void canRunActionWithArgsInAnotherLane() {
-		String hi(String s) {
-			return s;
-		}
-		
-		value promise = Action(() => hi("Hi")).runOn(lane);
-		waitUntil(() => promise.getOrNoValue() is String, 2000);
-		value result = promise.getOrNoValue();
-		
-		assert(result == "Hi");
-	}
-	
-}
 
 class WritableOncePromiseTest() {
 	
@@ -50,7 +20,7 @@ class WritableOncePromiseTest() {
 		assertEquals(promise.getOrNoValue(), "Hi");
 		assertEquals(promise.getOrNoValue(), "Hi");
 	}
-		
+	
 	shared test void canProvideResultAsyncWhenValueIsSetEarlier() {
 		promise.set("Hi");
 		variable Anything capture = null;

@@ -1,33 +1,14 @@
 import ceylon.collection {
 	HashMap
 }
-import ceylon.language {
-	shared
-}
 
 import concurrencey.internal {
-	runSoonest,
 	idCreator
 }
 
-
-import java.lang {
-	Runnable
+import java.util.concurrent.atomic {
+	AtomicInteger
 }
-import java.util.concurrent.atomic { AtomicInteger }
-
-"The result of a computation which has not completed successfully."
-shared class ComputationFailed(
-	shared Exception exception,
-	shared String reason = "") {}
-
-shared class ComputationFailedWithId(
-	shared Integer id,
-	Exception exception,
-	String reason = "") extends ComputationFailed(exception, reason) {}
-
-shared class TimeoutException(shared actual String message = "")
-		extends Exception(message) {}
 
 "A computation result destination"
 shared interface AcceptsValue<in Result, in Failure=ComputationFailed>
@@ -36,10 +17,6 @@ shared interface AcceptsValue<in Result, in Failure=ComputationFailed>
 	shared formal void set(Result|Failure result);
 }
 
-"Indicates that a value has not been set yet for a [[HasValue]]."
-shared abstract class NoValue() of noValue {}
-
-shared object noValue extends NoValue() {}
 
 "A computation result source"
 shared interface HasValue<out Result, out Failure=ComputationFailed>
@@ -125,7 +102,7 @@ shared class WritableOncePromise<Result, Failure=ComputationFailed>(
 		if (is NoValue currentResult) {
 			listeners.put(listenerId, listener);
 		}
-		if (is Result|ComputationFailed currentResult) {
+		if (is Result|Failure currentResult) {
 			listener(currentResult);
 		}
 		return listenerId;
@@ -134,84 +111,5 @@ shared class WritableOncePromise<Result, Failure=ComputationFailed>(
 	shared actual Boolean stopListening(ListenerId listenerId) {
 		return (listeners.remove(listenerId) exists);
 	}
-	
-}
-
-"An Action represents a computation which can be run a single time,
- synchronously or asynchronously (in a different [[Lane]].
- 
- If running an Action asynchronously, the result of the computation
- is provided by a [[Promise]]."
-shared abstract class ActionBase<out Result, out Failure=ComputationFailed>(
-	Result() act)
-		given Failure satisfies Object {
-	
-	value writablePromise = WritableOncePromise<Result, Failure>();
-	
-	"The Promise associated with this action."
-	shared default Promise<Result, Failure> promise = writablePromise;
-	
-	void update(Failure|Result result) {
-		writablePromise.set(result);
-	}
-	
-	void assertCanRun() {
-		if (!writablePromise.getOrNoValue() is NoValue) {
-			throw Exception("Action can run only once!");
-		}
-	}
-	
-	"Adaptor to transform the source of a Failure into the actual Failure type"
-	shared formal Failure failureAdaptor(Exception exception);
-	
-	"Run this action synchonously."
-	shared default Result syncRun() {
-		assertCanRun();
-		value result = act();
-		update(result);
-		return result;
-	}
-	
-	"Run this action on a specific [[Lane]]. **This method is intended to be called
-	 by the Concurrencey framework only.**"	
-	shared default Promise<Result, Failure> runOn(Lane lane) {
-		assertCanRun();
-		object runnable satisfies Runnable {
-			shared actual void run() {
-				try {
-					update(act());
-				} catch (e) {
-					e.printStackTrace();
-					update(failureAdaptor(e));
-				}
-			}
-		}
-		runSoonest(lane, runnable);
-		return promise;
-	}
-	
-}
-
-"An Action represents a computation which can be run a single time,
- synchronously or asynchronously (in a different [[Lane]].
- 
- If running an Action asynchronously, the result of the computation
- is provided by a [[Promise]]."
-shared class Action<out Result>(Result() act)
-		extends ActionBase<Result, ComputationFailed>(act) {
-	
-	failureAdaptor(Exception e) => ComputationFailed(e); 
-	
-}
-
-"An [[Action]] which has an ID, useful to map several results to their corresponding Actions"
-shared class IdAction<Id, Result>(
-	shared Id id,
-	[Id, Result]() act)
-		extends ActionBase<[Id, Result], [Id, ComputationFailed]>(act)
-		given Id satisfies Object {
-	
-	shared actual [Id, ComputationFailed] failureAdaptor(Exception exception) =>
-			[id, ComputationFailed(exception)];
 	
 }
