@@ -1,5 +1,5 @@
 import ceylon.test {
-	test
+	test, assertEquals
 }
 
 import concurrencey.internal {
@@ -86,6 +86,32 @@ class ActionRunnerTest() {
 		assert(2 * sleepTime <= time_result.first < 3 * sleepTime);
 		value results = time_result[1];
 		assertElementsEqual(results, { "A", "B", "C", "D" });
+	}
+	
+	shared test void exceptionsAreHandledCorrectly() {
+		void throwIdException() {
+			throw IdException(42, Exception("Bad answer"));
+		}
+		
+		value assertionPromise = WritableOncePromise<Exception?>();
+		
+		void ensureIdExceptionReceived(Anything|Exception result) {
+			try {
+				assert(is IdException result);
+				assertEquals(result.id, 42);
+				assertEquals(result.cause.message, "Bad answer");
+				assertionPromise.set(null);
+			} catch (e) {
+				assertionPromise.set(e);
+			}
+		}
+		
+		value runner = StrategyActionRunner();
+		runner.run(Action(() => throwIdException()))
+			.onCompletion(ensureIdExceptionReceived);
+		
+		waitUntil(() => ! assertionPromise.getOrNoValue() is NoValue);
+		assert(assertionPromise.getOrNoValue() is Null);
 	}
 	
 }

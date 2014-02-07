@@ -1,6 +1,6 @@
 import ceylon.test {
 	test,
-	assertEquals
+	assertEquals, assertThatException
 }
 
 import concurrencey.internal {
@@ -30,6 +30,12 @@ class ActionTest() {
 		value result = promise.getOrNoValue();
 		
 		assert(result == "Hi");
+	}
+	
+	shared test void cannotRunMoreThanOnce() {
+		value act = Action(() => "Hi");
+		act.runOn(lane);
+		assertThatException(() => act.runOn(lane)).hasType(`ForbiddenInvokationException`);
 	}
 	
 }

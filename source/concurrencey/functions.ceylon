@@ -54,8 +54,8 @@ shared void waitUntil(
 		case (is Boolean) {
 			satisfied = result;
 		}
-		case (is ComputationFailed) {
-			throw result.exception;
+		case (is Exception) {
+			throw result;
 		}
 		value now = system.milliseconds;
 		if (now >= timeoutTime) {

@@ -11,13 +11,11 @@ import ceylon.language {
 }
 
 import concurrencey {
-	Promise,
-	ComputationFailed
+	Promise
 }
 import concurrencey.internal {
 	returnLaneWhenFree
 }
-
 
 import java.util.concurrent {
 	CountDownLatch
@@ -32,9 +30,9 @@ shared abstract class ActionRunner() {
 	 returning a [[Promise]] which can be used to retrieve the result of
 	 each Action."
 	shared default [Promise<Element>+] runActions<Element, First, Rest>(
-		Tuple<ActionBase<Element>, First, Rest> actions)
-			given First satisfies ActionBase<Element>
-			given Rest satisfies ActionBase<Element>[] {
+		Tuple<Action<Element>, First, Rest> actions)
+			given First satisfies Action<Element>
+			given Rest satisfies Action<Element>[] {
 		return [for (act in actions) run(act) ];
 	}
 	
@@ -45,21 +43,34 @@ shared abstract class ActionRunner() {
 	 The order of the returned Promises matches the order the given Actions (the order in which
 	 the Actions are completed is not considered), except if several computations fail, in which
 	 case, although the order of successfull results is maintained, the order of failures is not."
-	shared default [Element|ComputationFailed*] runActionsAndWait<Element, First, Rest>(
-		Tuple<ActionBase<Element>, First, Rest> actions)
-			given First satisfies ActionBase<Element>
-			given Rest satisfies ActionBase<Element>[] {
+	shared default [Element|Exception*] runActionsAndWait<Element, First, Rest>(
+		Tuple<Action<Element>, First, Rest> actions)
+			given First satisfies Action<Element>
+			given Rest satisfies Action<Element>[] {
+		
 		value latch = CountDownLatch(actions.size);
 		
-		value collector = Array<Element|ComputationFailed?>({null}.repeat(actions.size));
+		value collector = Array<Element|Exception?>({null}.repeat(actions.size));
 		
-		void captureResult([Integer, Element]|[Integer, ComputationFailed] result) {
-			collector.set(result.first, result[1]);
+		void captureResult([Integer, Element]|Exception result) {
+			if (is [Integer, Element] result) {
+				collector.set(result.first, result[1]);	
+			} else if (is IdException result) {
+				collector.set(result.id, result);
+			}
 			latch.countDown();
 		}
 		
+		[Integer, Element] delegateAct(Integer id, Action<Element> act) {
+			try {
+				return [id, act.syncRun()];
+			} catch (e) {
+				throw IdException(id, e);
+			}
+		}
+		
 		for (id -> act in entries(actions)) {
-			run(IdAction(id, () => [id, act.syncRun()]))
+			run(IdAction(id, () => delegateAct(id, act)))
 					.onCompletion(captureResult);
 		}
 		
@@ -70,12 +81,12 @@ shared abstract class ActionRunner() {
 	
 	"Runs the given [[Action]], possibly in parallel, and block until it has completed.
 	 The returned [[Promise]]s can be used to retrieve the result of the Action."
-	shared default Element|ComputationFailed runAndWait<Element>(ActionBase<Element> action) {
+	shared default Element|Exception runAndWait<Element>(Action<Element> action) {
 		value latch = CountDownLatch(1);
 		
-		variable Element|ComputationFailed|NoValue result = noValue;
+		variable Element|Exception|NoValue result = noValue;
 		
-		void captureResult(Element|ComputationFailed toCapture) {
+		void captureResult(Element|Exception toCapture) {
 			result = toCapture;
 			latch.countDown();
 		}
@@ -84,7 +95,7 @@ shared abstract class ActionRunner() {
 		
 		latch.await();
 		
-		if (is Element|ComputationFailed final = result) {
+		if (is Element|Exception final = result) {
 			return final;
 		}
 		
@@ -93,9 +104,8 @@ shared abstract class ActionRunner() {
 	
 	"Runs the given [[Action]], possibly asynchrounously, returning a
 	 [[Promise]] which can be used to retrieve the result of the Action."
-	shared formal Promise<Element, Failure> run<out Element, out Failure=ComputationFailed>(
-		ActionBase<Element, Failure> action)
-			given Failure satisfies Object;
+	shared formal Promise<Element> run<out Element>(
+		Action<Element> action);
 	
 }
 
@@ -105,9 +115,8 @@ shared class StrategyActionRunner(
 	shared LaneStrategy laneStrategy = UnlimitedLanesStrategy())
 		extends ActionRunner() {
 	
-	shared actual Promise<Element, Failure> run<out Element, out Failure=ComputationFailed>(
-		ActionBase<Element, Failure> action)
-			given Failure satisfies Object =>
+	shared actual Promise<Element> run<out Element>(
+		Action<Element> action) =>
 			action.runOn(laneStrategy.provideLaneFor(action));
 	
 }
@@ -115,13 +124,13 @@ shared class StrategyActionRunner(
 "A strategy for allocating [[Lane]]s to [[Action]]s."
 shared interface LaneStrategy {
 	"Provides a [[Lane]] for the given [[Action]]."
-	shared formal Lane provideLaneFor(ActionBase<Anything, Object> action);
+	shared formal Lane provideLaneFor(Action<Anything> action);
 }
 
 "A [[LaneStrategy]] which always uses a single [[Lane]] to run all [[Action]]s."
 shared class SingleLaneStrategy() satisfies LaneStrategy {
 	value lane = Lane("single-lane-strategy");
-	provideLaneFor(ActionBase<Anything, Object> action) => lane;
+	provideLaneFor(Action<Anything> action) => lane;
 }
 
 "A [[LaneStrategy]] which only uses the provided number of [[Lane]]s to run [[Action]]s.
@@ -148,7 +157,7 @@ shared class LimitedLanesStrategy(shared Integer maximumLanes)
 	Lane nextVirginOrFreeLane() =>
 			virginLane() else nextLane() else waitForFreeLane();
 	
-	shared actual Lane provideLaneFor(ActionBase<Anything, Object> action) {
+	shared actual Lane provideLaneFor(Action<Anything> action) {
 		value lane = nextVirginOrFreeLane();
 		returnLaneWhenFree(lane, lanes);
 		return lane;
@@ -168,7 +177,7 @@ shared class UnlimitedLanesStrategy() satisfies LaneStrategy {
 	
 	Lane nextFreeLaneOrNewOne() => lanes.removeFirst() else newLane();
 	
-	shared actual Lane provideLaneFor(ActionBase<Anything, Object> action) {
+	shared actual Lane provideLaneFor(Action<Anything> action) {
 		value lane = nextFreeLaneOrNewOne();
 		returnLaneWhenFree(lane, lanes);
 		return lane;

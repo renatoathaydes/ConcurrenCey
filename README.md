@@ -15,34 +15,49 @@ You just need to add this declaration to your Ceylon module:
 import concurrencey "0.0.1"
 ```
 
-## Parallel computation
+## How to use
 
-Run Actions in parallel using an `ActionRunner`:
+Concurrencey solves the problem of executing concurrent code (ie. code which can run in parallel) by providing a number of useful constructs which are easy to use, while at the same time allowing all the flexibility required to solve even the most challenging issues.
+
+A ``Lane`` represents a thread of execution where ``Action``s may run.
+
+> Note: Lanes always have a backing Thread, but the Threads may be discarded or re-created to maximize resources utilization.
+
+``Action``s are light-weight units of execution which may run at most once. Although you can run ``Action``s directly, it is much more flexible to use a ``StrategyActionRunner`` to do the job.
+
+### StrategyActionRunner
+
+An ``StrategyActionRunner`` may use one of the following strategies to run ``Action``s:
+
+  * ``UnlimitedLanesStrategy``: will use as many ``Lanes`` as possible.
+  * ``LimitedLanesStrategy``: use at most a pre-defined number of ``Lane``s.
+  * ``SingleLaneStrategy``: ensures the use of a single ``Lane``.
+
+Example of running ``Action``s using a ``StrategyActionRunner``:
 
 ```ceylon
-function expensiveComputation() { ... }
-
-// create a runner that can run Actions using different strategies 
-value runner = StrategyActionRunner(unlimitedLanesStrategy);
+value runner = StrategyActionRunner(); // UnlimitedLanesStrategy by default
 
 value promises = runner.runActions([
-	Action(expensiveComputation),
-	Action(() => Resource(verySlow).useIt())]);
+	Action(() => someMethod("arg")),
+	Action(anotherFunction) ]);
 
-// callback to run when expensiveComputation completes
-void handleResult(String|ComputationFailed result) {
-	switch(result)
-	case (is String) { print("Got a String ``result``"); }
-	case (is ComputationFailed) { print(result.exception); }
-}
-
-promises.first.onCompletion(handleResult);
-
-// can also get results synchronously (blocking!)
-value results = runner.runActionsAndWait( ... );
+promises.first.onCompletion(useSomeMethodResult);
 ```
 
-You may control directly how to run Actions in different Lanes:
+Notice that when you run actions, you usually do not get the results back directly. You get a ``Promise`` that you can use to get the results asynchronously (by giving the Promise an ``onCompletion`` function).
+
+In the rare cases where you must wait for the results before being able to proceed, you can use the methods which explicitly say ``runAndWait``:
+
+```ceylon
+value results = runner.runActionsAndWait([
+	Action(() => someMethod("arg")),
+	Action(anotherFunction) ]);
+```
+
+### Using Lanes and Actions directly
+
+You may also control directly how to run Actions in different Lanes:
 
 ```ceylon
 value guiLane = Lane("GUI");
@@ -52,4 +67,44 @@ Action(createWindows).runOn(guiLane);
 value recordsPromise = Action(loadRecordsFromDB).runOn(busLane);
 recordsPromise.onCompletion(updateWindows);
 ```
+
+### Synchronizing execution
+
+Similar to ``Java``'s synchronized blocks:
+
+```ceylon
+value resource = ...
+value resourceSync = Sync();
+
+resourceSync.syncExec(() => useResourceSafely(resource));
+```
+
+Because only a single Thread is guaranteed to execute at a given time, ``Sync`` allows sharing resources as if in a single-threaded environment. If you must avoid starvation in your system, you can enable fairness (at a performance cost) by calling the constructor with ``Sync(true)``.
+
+### Using third-party Threads as Lanes
+
+You can create your own ``ActionRunner``s in order to allow the use of third-party Threads within the ConcurrenCey framework.
+
+Here's an example of how you would use ConcurrenCey together with JavaFX:
+
+
+```ceylon
+object javaFxActionRunner extends ActionRunner() {
+	
+	Promise<Element> runOnJavaFxThread<Element>(Action<Element> action) {
+		object toRun satisfies Runnable {
+			run() => action.syncRun();
+		}
+		Platform.runLater(toRun);
+		return action.promise;
+	}
+	
+	shared actual Promise<Element> run<Element>(Action<Element> action)
+			=> runOnJavaFxThread(action);
+	
+}
+
+javaFxActionRunner.runAction(updateGuiFields);
+```
+
 

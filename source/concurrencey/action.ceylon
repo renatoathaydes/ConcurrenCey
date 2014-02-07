@@ -9,34 +9,31 @@ import concurrencey.internal {
 import java.lang {
 	Runnable
 }
+import java.util.concurrent.atomic { AtomicBoolean }
 
 
 "An Action represents a computation which can be run a single time,
- synchronously or asynchronously (in a different [[Lane]].
+ synchronously (blocking) or asynchronously (in a different [[Lane]]).
  
  If running an Action asynchronously, the result of the computation
  is provided by a [[Promise]]."
-shared abstract class ActionBase<out Result, out Failure=ComputationFailed>(
-	Result() act)
-		given Failure satisfies Object {
+shared class Action<out Result>(Result() act) {
 	
-	value writablePromise = WritableOncePromise<Result, Failure>();
+	value hasRun = AtomicBoolean(false);
+	value writablePromise = WritableOncePromise<Result>();
 	
 	"The Promise associated with this action."
-	shared default Promise<Result, Failure> promise = writablePromise;
+	shared default Promise<Result> promise = writablePromise;
 	
-	void update(Failure|Result result) {
+	void update(Result|Exception result) {
 		writablePromise.set(result);
 	}
 	
 	void assertCanRun() {
-		if (!writablePromise.getOrNoValue() is NoValue) {
-			throw Exception("Action can run only once!");
+		if (hasRun.getAndSet(true)) {
+			throw ForbiddenInvokationException("Action can run only once!");
 		}
 	}
-	
-	"Adaptor to transform the source of a Failure into the actual Failure type"
-	shared formal Failure failureAdaptor(Exception exception);
 	
 	"Run this action synchonously."
 	shared default Result syncRun() {
@@ -46,9 +43,8 @@ shared abstract class ActionBase<out Result, out Failure=ComputationFailed>(
 		return result;
 	}
 	
-	"Run this action on a specific [[Lane]]. **This method is intended to be called
-	 by the Concurrencey framework only.**"	
-	shared default Promise<Result, Failure> runOn(Lane lane) {
+	"Run this action on a specific [[Lane]]"	
+	shared default Promise<Result> runOn(Lane lane) {
 		assertCanRun();
 		object runnable satisfies Runnable {
 			shared actual void run() {
@@ -56,7 +52,7 @@ shared abstract class ActionBase<out Result, out Failure=ComputationFailed>(
 					update(act());
 				} catch (e) {
 					e.printStackTrace();
-					update(failureAdaptor(e));
+					update(e);
 				}
 			}
 		}
@@ -66,26 +62,8 @@ shared abstract class ActionBase<out Result, out Failure=ComputationFailed>(
 	
 }
 
-"An Action represents a computation which can be run a single time,
- synchronously or asynchronously (in a different [[Lane]].
- 
- If running an Action asynchronously, the result of the computation
- is provided by a [[Promise]]."
-shared class Action<out Result>(Result() act)
-		extends ActionBase<Result, ComputationFailed>(act) {
-	
-	failureAdaptor(Exception e) => ComputationFailed(e); 
-	
-}
-
 "An [[Action]] which has an ID, useful to map several results to their corresponding Actions"
-shared class IdAction<Id, Result>(
-	shared Id id,
-	[Id, Result]() act)
-		extends ActionBase<[Id, Result], [Id, ComputationFailed]>(act)
-		given Id satisfies Object {
-	
-	shared actual [Id, ComputationFailed] failureAdaptor(Exception exception) =>
-			[id, ComputationFailed(exception)];
-	
-}
+shared class IdAction<Result>(
+	shared Integer id,
+	[Integer, Result]() act)
+		extends Action<[Integer, Result]>(act) {}

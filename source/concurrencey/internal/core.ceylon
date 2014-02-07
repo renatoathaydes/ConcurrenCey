@@ -2,9 +2,6 @@ import ceylon.collection {
 	LinkedList,
 	HashMap
 }
-
-
-
 import java.lang {
 	Runnable,
 	Thread,

@@ -8,10 +8,10 @@ shared void run() {
 		Action(() => example("World")),
 		Action(() => true)]);
 	
-	void checkResult(String|Boolean|ComputationFailed result) {
+	void checkResult(String|Boolean|Exception result) {
 		switch(result)
 		case (is String) { print("Got a String ``result``"); }
-		case (is ComputationFailed) { print(result.exception); }
+		case (is Exception) { print(result); }
 		case (is Boolean) { print("A Boolean ``result``"); }
 	} 
 	
