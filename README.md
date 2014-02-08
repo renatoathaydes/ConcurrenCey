@@ -17,6 +17,64 @@ import concurrencey "0.0.1"
 
 ## How to use
 
+There are two ways you can use ConcurrenCey:
+
+* Actor Model: the design constraints imposed by this model nearly eliminates the need to use concurrency control. ConcurrenCey enables you do use Actors in a very simple way. 
+* Low-level control of execution: more traditional way of dealing with concurrency. However, ConcurrenCey makes it much simpler to deal with the unavoidable complexity of concurrent systems when compared to Java's approach.
+
+Notice that the two approaches are not mutually-exclusive! It makes sense to limit yourself to using the most appropriate techniques for your particular case, but sometimes the best technique might involve a mix of the two.
+
+## Actor Model
+
+To use ConcurrenCey Actors, you only need to sub-class the ``Actor`` class and implement the ``react`` method, as shown below (extract from the [actors sample](source/samples/actors/actors.ceylon), which shows an implementation of the game Rock-Paper-Scissors using ConcurrenCey Actors):
+
+```ceylon
+class ComputerPlayer() extends Actor<Play>() {
+	
+	value random = Random();
+	
+	shared actual void react(Play message) {
+		switch(random.nextInt(3))
+		case (0) { message.sender.send(rock); }
+		case (1) { message.sender.send(paper); }
+		else { message.sender.send(scissors); }		
+	}
+	
+}
+```
+
+By default, all Actors will run on the same ``Lane`` (this may change later), however, if you want to, you may specify on which ``Lane`` each Actor will run by giving it one through the constructor:
+
+```ceylon
+class Gui() extends Actor<String>(Lane("gui-lane")) { ... }
+```
+
+Actors are generic to allow them to handle any type of message. For example, an Agent can be used to handle several types of Messages by the use of Ceylon's union types:
+
+```ceylon
+class Coordinator() extends Actor<Restart|Move|WatchTime>() { ... }
+```
+
+It is advisable to keep the number of Message types an Actor handles to a minimum. This is in line with the single-responsibility principle.
+
+Even though the ``react`` method of Actors is ``shared`` (so that you can refine it), it should only be called by the ConcurrenCey framework in order to maintain guarantees provided by the Actors model.
+
+For this reason, you should always keep references to Actors through the ``Sender`` interface, which only exposes the ``send`` method.
+
+```ceylon
+Sender<String> gui = Gui();
+Sender<Play|Restart> human = HumanPlayer();
+Sender<Play> computer = ComputerPlayer();
+```
+
+Ideally, you should only keep references even to ``Senders`` in the central point of your application. Most of the time, the only way to communicate with another Agent should be by replying to Messages sent by them. To ensure this, you most likely want to avoid having ``shared`` methods inside your ``Actors`` (do not call methods, send a Message!).
+
+The Actor Model may seem quite restrictive at first sight, but with a little practice it becomes quite natural to program using it! If your application can be divided into many separate logical parts which interact with each other through limited and well-defined units of information (ie. messages), then you certainly should consider using the Actor Model.
+
+However, it may not always be the best choice for your application. In cases you need more flexibility, or even higher performance, you can use the lower-level constructs provided by ConcurrenCey!
+
+## Low-level control of execution
+
 Concurrencey solves the problem of executing concurrent code (ie. code which can run in parallel) by providing a number of useful constructs which are easy to use, while at the same time allowing all the flexibility required to solve even the most challenging issues.
 
 A ``Lane`` represents a thread of execution where ``Action``s may run.
@@ -115,4 +173,28 @@ If you must avoid starvation in your system, you can enable fairness (at a perfo
 
 Notice that using ``Sync`` with fairness activated achieves similar results as using a ``StrategyActionRunner`` with the ``SingleLaneStrategy``.
 
+
+### Scheduling tasks
+
+The class ``Scheduler`` allows the scheduling of tasks.
+
+For example, to schedule a task to run in 50ms and then 2 hours from now:
+
+```ceylon
+value scheduler = Scheduler(); // Scheduler(false) to not run as deamon
+value checkTime = Action(() => system.milliseconds);
+value inAMoment = Instant(system.milliseconds + 50);
+value in2hours = now().plus(Period { hours = 2; });
+scheduler.schedule([inAMoment, in2hours], () => checkTime.runOn(testLane));
+```
+
+For repeating tasks, you can use ``scheduleAtFixedRate`` (example of scheduling an Action to run starting inAMoment, then repeating every 25 milliseconds):
+
+```ceylon
+value task = scheduler.scheduleAtFixedRate(
+		inAMoment, 25, () => checkTime.runOn(testLane));
+
+// much later
+task.cancel();
+```
 

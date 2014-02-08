@@ -74,6 +74,19 @@ class SchedulerTest() {
 		assert(checkTime.promise.getOrNoValue() is NoValue);
 	}
 	
+	shared test void canCancelRepeatingTaskBeforeRunning() {
+		value checkTime = Action(() => system.milliseconds);
+		value inAMoment = Instant(system.milliseconds + 50);
+		
+		value task = scheduler.scheduleAtFixedRate(inAMoment, 25, () =>
+				checkTime.runOn(testLane));
+		
+		task.cancel();
+		sleep(100);
+		
+		assert(checkTime.promise.getOrNoValue() is NoValue);
+	}
+	
 	shared test void exceptionIsThrownIfSchedulingTaskOnShutDownScheduler() {
 		scheduler.shutDown();
 		assertThatException(() => scheduler.schedule([now()], void () {}));//.hasType(`ForbiddenInvokationException`);
