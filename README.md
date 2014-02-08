@@ -68,19 +68,6 @@ value recordsPromise = Action(loadRecordsFromDB).runOn(busLane);
 recordsPromise.onCompletion(updateWindows);
 ```
 
-### Synchronizing execution
-
-Similar to ``Java``'s synchronized blocks:
-
-```ceylon
-value resource = ...
-value resourceSync = Sync();
-
-resourceSync.syncExec(() => useResourceSafely(resource));
-```
-
-Because only a single Thread is guaranteed to execute at a given time, ``Sync`` allows sharing resources as if in a single-threaded environment. If you must avoid starvation in your system, you can enable fairness (at a performance cost) by calling the constructor with ``Sync(true)``.
-
 ### Using third-party Threads as Lanes
 
 You can create your own ``ActionRunner``s in order to allow the use of third-party Threads within the ConcurrenCey framework.
@@ -104,7 +91,28 @@ object javaFxActionRunner extends ActionRunner() {
 	
 }
 
-javaFxActionRunner.runAction(updateGuiFields);
+String updateGuiFields() { ... }
+void notifyUser(String|Exception message) { ... }
+
+value guiFieldsUpdated = javaFxActionRunner.run(Action(updateGuiFields));
+guiFieldsUpdated.onCompletion(notifyUser);
 ```
+
+### Synchronizing execution
+
+If you want, you can avoid the use of ``Action``s and ``Lane``s and use a style more similar to ``Java``'s synchronized blocks:
+
+```ceylon
+value resource = ...
+value resourceSync = Sync();
+
+resourceSync.syncExec(() => useResourceSafely(resource));
+```
+
+Because only a single Thread is guaranteed to execute the function passed to ``syncExec`` at a given time, ``Sync`` allows sharing resources as if in a single-threaded environment.
+
+If you must avoid starvation in your system, you can enable fairness (at a performance cost) by calling the constructor with ``Sync(true)``.
+
+Notice that using ``Sync`` with fairness activated achieves similar results as using a ``StrategyActionRunner`` with the ``SingleLaneStrategy``.
 
 
