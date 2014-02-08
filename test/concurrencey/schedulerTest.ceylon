@@ -1,5 +1,5 @@
 import ceylon.test {
-	test, beforeTest
+	test, beforeTest, assertThatException
 }
 import ceylon.time {
 	now,
@@ -60,6 +60,23 @@ class SchedulerTest() {
 			assert(startTime + expectedDelay <= actualTime < startTime + expectedDelay + 25);	
 		}
 		
+	}
+	
+	shared test void canCancelTaskBeforeRunning() {
+		value checkTime = Action(() => system.milliseconds);
+		value inAMoment = Instant(system.milliseconds + 50);
+		
+		value task = scheduler.schedule([inAMoment], () => checkTime.runOn(testLane));
+		
+		task.cancel();
+		sleep(100);
+		
+		assert(checkTime.promise.getOrNoValue() is NoValue);
+	}
+	
+	shared test void exceptionIsThrownIfSchedulingTaskOnShutDownScheduler() {
+		scheduler.shutDown();
+		assertThatException(() => scheduler.schedule([now()], void () {}));//.hasType(`ForbiddenInvokationException`);
 	}
 	
 }

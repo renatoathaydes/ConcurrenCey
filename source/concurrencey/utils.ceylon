@@ -7,8 +7,10 @@ shared class IdException(shared Integer id, shared actual Exception cause)
 shared class TimeoutException(shared actual String message = "")
 		extends Exception(message) {}
 
-shared class ForbiddenInvokationException(String message = "")
-		extends Exception(message) {}
+shared class ForbiddenInvokationException(
+	String message = "",
+	Exception? exception = null)
+		extends Exception(message, exception) {}
 
 "Indicates that a value has not been set yet for a [[HasValue]]."
 shared abstract class NoValue() of noValue {}
@@ -34,7 +36,7 @@ shared class Sync(
 			lock.unlock();
 		}
 	}
-
+	
 	"Runs the given Action, ensuring only a single Thread or [[Lane]] can
 	 enter execution at a given time.
 	 
