@@ -4,7 +4,6 @@ import ceylon.collection {
 import ceylon.language {
 	shared,
 	default,
-	Tuple,
 	variable,
 	formal,
 	actual
@@ -29,10 +28,8 @@ shared abstract class ActionRunner() {
 	"Runs the given [[Action]]s, possibly asynchrounously and in parallel,
 	 returning a [[Promise]] which can be used to retrieve the result of
 	 each Action."
-	shared default [Promise<Element>+] runActions<Element, First, Rest>(
-		Tuple<Action<Element>, First, Rest> actions)
-			given First satisfies Action<Element>
-			given Rest satisfies Action<Element>[] {
+	shared default [Promise<Element>+] runActions<Element>(
+		[Action<Element>+] actions) {
 		return [for (act in actions) run(act) ];
 	}
 	
@@ -43,10 +40,8 @@ shared abstract class ActionRunner() {
 	 The order of the returned Promises matches the order the given Actions (the order in which
 	 the Actions are completed is not considered), except if several computations fail, in which
 	 case, although the order of successfull results is maintained, the order of failures is not."
-	shared default [Element|Exception*] runActionsAndWait<Element, First, Rest>(
-		Tuple<Action<Element>, First, Rest> actions)
-			given First satisfies Action<Element>
-			given Rest satisfies Action<Element>[] {
+	shared default [Element|Exception*] runActionsAndWait<Element>(
+		[Action<Element>*] actions) {
 		
 		value latch = CountDownLatch(actions.size);
 		
