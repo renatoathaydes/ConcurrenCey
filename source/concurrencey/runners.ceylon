@@ -26,20 +26,19 @@ import java.util.concurrent {
 shared abstract class ActionRunner() {
 	
 	"Runs the given [[Action]]s, possibly asynchrounously and in parallel,
-	 returning a [[Promise]] which can be used to retrieve the result of
-	 each Action."
+	 returning [[Promise]]s which can be used to retrieve the result of
+	 each Action.
+	 
+	 The order of the returned Promises matches the order the given Actions
+	 (not the order in which the Actions are completed)."
 	shared default [Promise<Element>+] runActions<Element>(
 		[Action<Element>+] actions) {
 		return [for (act in actions) run(act) ];
 	}
 	
 	"Runs the given [[Action]]s, possibly in parallel, and block until all
-	 Actions have completed, returning [[Promise]]s which can be used to retrieve the result of
-	 each Action.
-	 
-	 The order of the returned Promises matches the order the given Actions (the order in which
-	 the Actions are completed is not considered), except if several computations fail, in which
-	 case, although the order of successfull results is maintained, the order of failures is not."
+	 Actions have completed, returning the result of each Action in the same order as the
+	 given Actions (not the order in which the Actions are completed)."
 	shared default [Element|Exception*] runActionsAndWait<Element>(
 		[Action<Element>*] actions) {
 		
@@ -74,8 +73,8 @@ shared abstract class ActionRunner() {
 		return collector.coalesced.sequence;
 	}
 	
-	"Runs the given [[Action]], possibly in parallel, and block until it has completed.
-	 The returned [[Promise]]s can be used to retrieve the result of the Action."
+	"Runs the given [[Action]], possibly in parallel, and block until it has completed,
+	 returning the result of the given Action."
 	shared default Element|Exception runAndWait<Element>(Action<Element> action) {
 		value latch = CountDownLatch(1);
 		
@@ -97,7 +96,7 @@ shared abstract class ActionRunner() {
 		throw;
 	}
 	
-	"Runs the given [[Action]], possibly asynchrounously, returning a
+	"Runs the given [[Action]] asynchrounously, returning a
 	 [[Promise]] which can be used to retrieve the result of the Action."
 	shared formal Promise<Element> run<out Element>(
 		Action<Element> action);
@@ -122,7 +121,10 @@ shared interface LaneStrategy {
 	shared formal Lane provideLaneFor(Action<Anything> action);
 }
 
-"A [[LaneStrategy]] which always uses a single [[Lane]] to run all [[Action]]s."
+"A [[LaneStrategy]] which always uses a single [[Lane]] to run all [[Action]]s.
+ 
+ Notice that each instance of this class will provide its own [[Lane]], so using
+ the same instance for different [[ActionRunner]]s will result in them using a single Lane."
 shared class SingleLaneStrategy() satisfies LaneStrategy {
 	value lane = Lane("single-lane-strategy");
 	provideLaneFor(Action<Anything> action) => lane;
@@ -163,7 +165,9 @@ shared class LimitedLanesStrategy(shared Integer maximumLanes)
 "A [[LaneStrategy]] which uses as many [[Lane]]s as necessary to run all provided
  [[Action]]s. Notice that although running Actions in parallel generaly speeds up
  the completion of all tasks, running a very large number of Actions in parallel
- may not provide much benefit due to scheduling overhead."
+ may not provide much benefit due to scheduling overhead.
+ 
+ A single instance of this class may be safely shared between many [[ActionRunner]]s."
 shared class UnlimitedLanesStrategy() satisfies LaneStrategy {
 	
 	value lanes = LinkedList<Lane>();
