@@ -26,7 +26,7 @@ Notice that the two approaches are not mutually-exclusive! It makes sense to lim
 
 ## Actor Model
 
-To use ConcurrenCey Actors, you only need to sub-class the ``Actor`` class and implement the ``react`` method, as shown below (extract from the [actors sample](source/samples/actors/actors.ceylon), which shows an implementation of the game Rock-Paper-Scissors using ConcurrenCey Actors):
+To use ConcurrenCey Actors, you only need to sub-class the ``Actor`` class and implement the ``react`` method, as shown below (this is an extract from one of the [actors samples](source/samples/actors/rock_paper_scissors.ceylon), which shows an implementation of the game Rock-Paper-Scissors using ConcurrenCey Actors):
 
 ```ceylon
 class ComputerPlayer() extends Actor<Play>() {
@@ -67,7 +67,9 @@ Sender<Play|Restart> human = HumanPlayer();
 Sender<Play> computer = ComputerPlayer();
 ```
 
-Ideally, you should only keep references even to ``Senders`` in the central point of your application. Most of the time, the only way to communicate with another Agent should be by replying to Messages sent by them. To ensure this, you most likely want to avoid having ``shared`` methods inside your ``Actors`` (do not call methods, send a Message!).
+Ideally, you should only keep references (even to ``Senders``) in the central point of your application. Most of the time, the only way to communicate with another Agent should be by replying to Messages sent by them. To ensure this is the case, you most likely want to avoid having ``shared`` methods inside your ``Actors`` (do not call methods, send a Message!).
+
+> If you want to quickly get started with Actors, have a look at the [Hello World sample](source/samples/actors/hello_world.ceylon).
 
 The Actor Model may seem quite restrictive at first sight, but with a little practice it becomes quite natural to program using it! If your application can be divided into many separate logical parts which interact with each other through limited and well-defined units of information (ie. messages), then you certainly should consider using the Actor Model.
 
@@ -173,6 +175,28 @@ If you must avoid starvation in your system, you can enable fairness (at a perfo
 
 Notice that using ``Sync`` with fairness activated achieves similar results as using a ``StrategyActionRunner`` with the ``SingleLaneStrategy``.
 
+### Blocking, when you have to...
+
+Blocking may not always be a good idea, but sometimes it is unavoidable.
+When you need to block until something happens, you can use ``SynchronousValue``:
+
+```ceylon
+value syncValue = SynchronousValue<String>();
+
+// give the syncValue to an Actor, for example, to notify us of something (like terminate execution)
+value actor = MyActor(syncValue);
+// more actors and other setup
+...
+// now finally wait until the Actor notifies us
+print("The actor says ``syncValue.syncGet(Duration(10k))``");
+```
+
+This can be used to keep the main Thread sleeping while the actors do their jobs. Once we receive the signal from one of our Actors,
+execution continues from the point where we called ``syncGet``. If there's no user Threads still alive (all ``ConcurrenCey`` Lanes run
+as deamons), the program will terminate and the JVM will shutdown.
+
+> Another way of blocking is to use ``ActionRunner#runAndWait`` or ``ActionRunner#runActionsAndWait``
+
 
 ### Scheduling tasks
 
@@ -197,4 +221,26 @@ value task = scheduler.scheduleAtFixedRate(
 // much later
 task.cancel();
 ```
+
+### Collections
+
+Due to the nature of concurrent applications, it is common to have mutable collections which you need to "observe", ie. to do something when the collection changes.
+
+For this purpose, ConcurrenCey offers the ``ObservableLinkedList`` class:
+
+```ceylon
+value list = ObservableLinkedList<String>();
+list.observe(void(Exception|ListEvent<String> event) {
+	switch(event)
+	case (is AddEvent<String>) { onAdd(event); }
+	case (is RemoveEvent<String>) { onRemove(event); }
+	case (is ReplaceEvent<String>) { onReplace(event); }
+	case (is Exception) { throw event; }
+});
+```
+
+Notice that the ObservableLinkedList is not thread-safe. To make it thread-safe, use ``Sync`` on all access to the list.
+
+> Thread-safe collections are, in my opinion, just too dangerous and easy to misuse to be worth having.
+> Far better is to use normal collections in a Thread-safe way, which is easy with ConcurrenCey anyway!
 
