@@ -43,6 +43,8 @@ class ComputerPlayer() extends Actor<Play>() {
 }
 ```
 
+> If you want to quickly get started with Actors, have a look at the [Hello World sample](source/samples/actors/hello_world.ceylon).
+
 By default, all Actors will run on the same ``Lane`` (this may change later), however, if you want to, you may specify on which ``Lane`` each Actor will run by giving it one through the constructor:
 
 ```ceylon
@@ -68,8 +70,6 @@ Sender<Play> computer = ComputerPlayer();
 ```
 
 Ideally, you should only keep references (even to ``Senders``) in the central point of your application. Most of the time, the only way to communicate with another Agent should be by replying to Messages sent by them. To ensure this is the case, you most likely want to avoid having ``shared`` methods inside your ``Actors`` (do not call methods, send a Message!).
-
-> If you want to quickly get started with Actors, have a look at the [Hello World sample](source/samples/actors/hello_world.ceylon).
 
 The Actor Model may seem quite restrictive at first sight, but with a little practice it becomes quite natural to program using it! If your application can be divided into many separate logical parts which interact with each other through limited and well-defined units of information (ie. messages), then you certainly should consider using the Actor Model.
 
