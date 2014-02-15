@@ -73,3 +73,25 @@ shared void waitUntil(
 shared Lane? currentLane() {
 	return internalCurrentLane();
 }
+
+
+shared Boolean equivalent(Anything el1, Anything el2) {
+	if (exists el1, exists el2) {
+		if (is Iterable<Anything> el1, is Iterable<Anything> el2 ) {
+			if (el1.size != el2.size) {
+				return false;
+			}
+			value iter1 = el1.iterator();
+			value iter2 = el2.iterator();
+			while(!is Finished next1 = iter1.next()) {
+				value next2 = iter2.next();
+				if (!equivalent(next1, next2)) {
+					return false;
+				}
+			}
+			return true;
+		}
+		return el1 == el2;
+	}
+	return ! el1 exists && ! el2 exists;
+}
