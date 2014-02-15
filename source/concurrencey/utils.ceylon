@@ -1,4 +1,6 @@
-import java.util.concurrent.locks { ReentrantLock }
+import java.util.concurrent.locks {
+	ReentrantLock
+}
 
 
 shared class IdException(shared Integer id, shared actual Exception cause)

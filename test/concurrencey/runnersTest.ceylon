@@ -97,6 +97,7 @@ class ActionRunnerTest() {
 		
 		void ensureIdExceptionReceived(Anything|Exception result) {
 			try {
+				print("The result is ``result else "NULL"``");
 				assert(is IdException result);
 				assertEquals(result.id, 42);
 				assertEquals(result.cause.message, "Bad answer");
@@ -111,7 +112,9 @@ class ActionRunnerTest() {
 			.onCompletion(ensureIdExceptionReceived);
 		
 		waitUntil(() => ! assertionPromise.getOrNoValue() is NoValue);
-		assert(assertionPromise.getOrNoValue() is Null);
+		if (is Exception e = assertionPromise.getOrNoValue()) {
+			throw e;
+		}
 	}
 	
 }

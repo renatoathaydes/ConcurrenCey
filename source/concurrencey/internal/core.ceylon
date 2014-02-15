@@ -1,7 +1,13 @@
 import ceylon.collection {
-	LinkedList,
-	HashMap
+	HashMap,
+	MutableList
 }
+
+import concurrencey {
+	Lane,
+	Sync
+}
+
 import java.lang {
 	Runnable,
 	Thread,
@@ -21,22 +27,21 @@ import java.util.concurrent {
 import java.util.concurrent.atomic {
 	AtomicBoolean
 }
-import concurrencey { Lane }
 
-alias LaneWaiters => HashMap<Lane, LinkedList<Lane>>;
+alias LaneWaiters => HashMap<Lane, [Sync, MutableList<Lane>]>;
 
 JMap<String, OnDemandThread?> threads = Collections.synchronizedMap(JHMap<String, OnDemandThread?>());
 
 JList<Lane> busyLanes = Collections.synchronizedList(ArrayList<Lane>());
 
-LaneWaiters freeLaneWaiters = HashMap<Lane, LinkedList<Lane>>();
+LaneWaiters freeLaneWaiters = HashMap<Lane, [Sync, MutableList<Lane>]>();
 
 shared Boolean isLaneBusy(Lane lane) {
 	return busyLanes.contains(lane);
 }
 
-shared void returnLaneWhenFree(Lane lane, LinkedList<Lane> freeLanes) {
-	freeLaneWaiters.put(lane, freeLanes);
+shared void returnLaneWhenFree(Sync lanesSync, Lane lane, MutableList<Lane> freeLanes) {
+	freeLaneWaiters.put(lane, [lanesSync, freeLanes]);
 }
 
 class OnDemandThread(shared Lane lane) {
@@ -62,7 +67,7 @@ class OnDemandThread(shared Lane lane) {
 				if (queue.empty) {
 					busyLanes.remove(lane);
 					if (exists waiter = freeLaneWaiters[lane]) {
-						waiter.add(lane);
+						waiter.first.syncExec(() => waiter[1].add(lane));
 					}
 				}
 			}

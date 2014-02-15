@@ -6,7 +6,7 @@ import concurrencey.internal {
  same as a Java Thread. A Lane might discard its current Thread if it has been long
  idle, for example, and start a new one only when necessary.
  
- It is guaranteed, however, that actions running on the same Lane will never simultaneously."
+ It is guaranteed, however, that actions running on the same Lane will never run simultaneously."
 shared class Lane(
 	"The name of this [[Lane]]. Names are not guaranteed to be unique, only IDs are."
 	shared String name) {

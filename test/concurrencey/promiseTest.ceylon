@@ -65,7 +65,7 @@ class WritableOncePromiseTest() {
 		
 		value id = promise.onCompletion((String|Exception s) => capture1 = s);
 		promise.onCompletion((String|Exception s) => capture2 = s);
-		value ok = promise.stopListening(id);
+		value ok = promise.stopObserving(id);
 		promise.set("Hi");
 		
 		assert(ok);

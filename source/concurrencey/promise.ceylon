@@ -1,6 +1,10 @@
 import ceylon.collection {
 	HashMap
 }
+import ceylon.language {
+	shared,
+	formal
+}
 
 import concurrencey.internal {
 	idCreator
@@ -26,15 +30,15 @@ shared interface HasValue<out Result> {
 
 "A key which can be used to identify listeners, for example to retrieve or remove them."
 see(`interface AsyncHasValue`)
-shared interface ListenerId of ListenerIdImpl {
+shared interface ObserverId of ObserverIdImpl {
 	shared formal Integer key;
 }
 
-class ListenerIdImpl() satisfies ListenerId {
+class ObserverIdImpl() satisfies ObserverId {
 	shared actual Integer key = idCreator.createId();
 	hash => key;
 	shared actual Boolean equals(Object other) {
-		if (is ListenerId other, other.key == key) {
+		if (is ObserverId other, other.key == key) {
 			return true;
 		}
 		return false;
@@ -44,17 +48,44 @@ class ListenerIdImpl() satisfies ListenerId {
 "A computation result which can be accessed asynchronously."
 shared interface AsyncHasValue<out Result> {
 	
-	"The given listener will be invoked on completion of the computation.
-	 Many listeners can be added.
+	"The given observer will be invoked on completion of the computation.
+	 Many observers can be added.
 	 
-	 Returns a [[ListenerId]] which can be used to stop listening."
-	see(`function stopListening`)
-	shared formal ListenerId onCompletion(Anything(Result|Exception) listener);
+	 Returns a [[ObserverId]] which may be used to stop observing."
+	shared formal ObserverId onCompletion(Anything(Result|Exception) listener);
+
+}
+
+"Base class for Observable values."
+see(`class WritableOncePromise<Result>`)
+shared abstract class Observable<Result>(
+	{<ObserverId->Anything(Result|Exception)>*} withObservers = {}) {
 	
-	"Unregister the listener with the given ID.
+	value waitingNotify = HashMap<ObserverId, Anything(Result|Exception)>(withObservers);
+	
+	"A Sync which may be used to synchronize access the observers."
+	shared Sync observersSync = Sync();
+	
+	"The observers observing this. For performance reasons, the returned map is
+	 a read-only view of the internal map, not a copy."
+	shared Map<ObserverId, Anything(Result|Exception)> observers = waitingNotify;
+	
+	"Observe this Observable."
+	shared ObserverId observe(Anything(Result|Exception) listener) {
+		value observerId = ObserverIdImpl();
+		observersSync.syncExec(() => waitingNotify.put(observerId, listener));
+		return observerId;
+	}
+	
+	"Ensure the observer with the given ID is unregistered.
 	 
-	 Returns true if and only if the listener was actually listening prior to this."
-	shared formal Boolean stopListening(ListenerId listenerId);
+	 Returns true if and only if the observer was actually listening prior to this.
+	 Notice that a write-only implementation might simply notify an Observer when it's added
+	 without necessarily adding it to its internal map as that would be unnecessary. Removing
+	 such observer would then return false."
+	shared Boolean stopObserving(ObserverId observerId) {
+		return observersSync.syncExec(() => waitingNotify.remove(observerId) exists);
+	}
 	
 }
 
@@ -66,20 +97,19 @@ shared interface Promise<out Result>
 "A Writable version of [[Promise]]. The Result of a computation should be set only once.
  Trying to set the Result more than once will result in an [[Exception]] being thrown."
 shared class WritableOncePromise<Result>(
-	{<ListenerId->Anything(Result|Exception)>*} withListeners = {})
+	{<ObserverId->Anything(Result|Exception)>*} withListeners = {})
+		extends Observable<Result>(withListeners)
 		satisfies Promise<Result> & AcceptsValue<Result> {
 	
-	value listeners = HashMap<ListenerId, Anything(Result|Exception)>(withListeners);
 	variable Result|Exception|NoValue result = noValue;
 	value setterCount = AtomicInteger(0);
-	value listenersSync = Sync();
-
+	
 	shared Integer attemptsToSet => setterCount.get();
 	
-	void setResultAndInformListeners(Result|Exception resultToSet) {
+	void setResultAndInformObservers(Result|Exception resultToSet) {
 		this.result = resultToSet;
-		for (listener in listeners.values) {
-			listener(resultToSet);
+		for (observer in observers.values) {
+			observer(resultToSet);
 		}
 	}
 	
@@ -87,7 +117,7 @@ shared class WritableOncePromise<Result>(
 	 an Exception is thrown otherwise."
 	shared actual void set(Result|Exception resultToSet) {
 		if (setterCount.getAndAdd(1) == 0) {
-			listenersSync.syncExec(() => setResultAndInformListeners(resultToSet));
+			observersSync.syncExec(() => setResultAndInformObservers(resultToSet));
 		} else {
 			throw ForbiddenInvokationException("The value of this WritableOncePromise has already been set");
 		}
@@ -97,23 +127,20 @@ shared class WritableOncePromise<Result>(
 		return result;
 	}
 	
-	void addOrJustInformListener(ListenerId id, Anything(Result|Exception) listener) {
+	ObserverId addOrJustInformObserver(Anything(Result|Exception) observer) {
 		value currentResult = result;
 		if (is NoValue currentResult) {
-			listeners.put(id, listener);
-		} else if (is Result|Exception currentResult) {
-			listener(currentResult);
+			return observe(observer);
 		}
+		if (is Result|Exception currentResult) {
+			observer(currentResult);
+			return ObserverIdImpl();
+		}
+		throw;
 	}
 	
-	shared actual ListenerId onCompletion(Anything(Result|Exception) listener) {
-		value listenerId = ListenerIdImpl();
-		listenersSync.syncExec(() => addOrJustInformListener(listenerId, listener));
-		return listenerId;
+	shared actual ObserverId onCompletion(Anything(Result|Exception) observer) {
+		return observersSync.syncExec(() => addOrJustInformObserver(observer));
 	}
-	
-	shared actual Boolean stopListening(ListenerId listenerId) {
-		return listenersSync.syncExec(() => listeners.remove(listenerId) exists);
-	}
-	
+
 }

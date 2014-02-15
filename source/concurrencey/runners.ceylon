@@ -8,9 +8,17 @@ import ceylon.language {
 	formal,
 	actual
 }
+import ceylon.time {
+	Duration
+}
 
 import concurrencey {
 	Promise
+}
+import concurrencey.collection {
+	ObservableLinkedList,
+	ListEvent,
+	AddEvent
 }
 import concurrencey.internal {
 	returnLaneWhenFree
@@ -140,15 +148,30 @@ shared class LimitedLanesStrategy(shared Integer maximumLanes)
 	value initialLanes = LinkedList({ for (i in 1..maximumLanes) Lane(
 		"limited-lanes-``i``") });
 	
-	value lanes = LinkedList(initialLanes);
+	value lanes = ObservableLinkedList(initialLanes);
 	
-	Lane? virginLane() => initialLanes.removeFirst();
+	value lanesSync = Sync();
 	
-	Lane? nextLane() => lanes.removeFirst();
+	Lane? virginLane() => lanesSync.syncExec(() => initialLanes.removeFirst());
+	
+	Lane? nextLane() => lanesSync.syncExec(() => lanes.removeFirst());
 	
 	Lane waitForFreeLane() {
-		waitUntil(() => !lanes.empty, 1P);
-		return nextVirginOrFreeLane();
+		value waiter = SynchronousValue<ListEvent<Lane>|Exception|Lane>();
+		lanesSync.syncExec(void() {
+			if (exists next = lanes.removeFirst()) {
+				waiter.set(next);
+			} else {
+				lanes.observe(waiter.set);
+			}
+		});
+		value result = waiter.syncGet(Duration(1P));
+		switch(result)
+		case (is Lane) { return result; }
+		case (is AddEvent<Lane>) { return result.elements.first; }
+		else {
+			return waitForFreeLane();
+		}
 	}
 	
 	Lane nextVirginOrFreeLane() =>
@@ -156,10 +179,10 @@ shared class LimitedLanesStrategy(shared Integer maximumLanes)
 	
 	shared actual Lane provideLaneFor(Action<Anything> action) {
 		value lane = nextVirginOrFreeLane();
-		returnLaneWhenFree(lane, lanes);
+		returnLaneWhenFree(lanesSync, lane, lanes);
 		return lane;
 	}
-	
+
 }
 
 "A [[LaneStrategy]] which uses as many [[Lane]]s as necessary to run all provided
@@ -172,13 +195,15 @@ shared class UnlimitedLanesStrategy() satisfies LaneStrategy {
 	
 	value lanes = LinkedList<Lane>();
 	
+	value lanesSync = Sync();
+	
 	Lane newLane() => Lane("no-limit-lanes");
 	
-	Lane nextFreeLaneOrNewOne() => lanes.removeFirst() else newLane();
+	Lane nextFreeLaneOrNewOne() => lanesSync.syncExec(() => lanes.removeFirst()) else newLane();
 	
 	shared actual Lane provideLaneFor(Action<Anything> action) {
 		value lane = nextFreeLaneOrNewOne();
-		returnLaneWhenFree(lane, lanes);
+		returnLaneWhenFree(lanesSync, lane, lanes);
 		return lane;
 	}
 	

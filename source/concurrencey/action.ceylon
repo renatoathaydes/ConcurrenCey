@@ -51,13 +51,12 @@ shared class Action<out Result>(Result() act) {
 				try {
 					update(act());
 				} catch (e) {
-					e.printStackTrace();
 					update(e);
 				}
 			}
 		}
 		runSoonest(lane, runnable);
-		return promise;
+		return writablePromise;
 	}
 	
 }
