@@ -1,17 +1,19 @@
 import ceylon.collection {
-	HashMap
+    HashMap,
+    unlinked,
+    Hashtable
 }
 import ceylon.language {
-	shared,
-	formal
+    shared,
+    formal
 }
 
 import concurrencey.internal {
-	idCreator
+    idCreator
 }
 
 import java.util.concurrent.atomic {
-	AtomicInteger
+    AtomicInteger
 }
 
 "A computation result destination"
@@ -22,7 +24,7 @@ shared interface AcceptsValue<in Result> {
 
 "A computation result source"
 shared interface HasValue<out Result> {
-	
+
 	"Returns the result of a computation if this [[HasValue]] can provide it
 	 immediately, or a [[NoValue]] otherwise."
 	shared formal Result|Exception|NoValue getOrNoValue();
@@ -47,10 +49,10 @@ class ObserverIdImpl() satisfies ObserverId {
 
 "A computation result which can be accessed asynchronously."
 shared interface AsyncHasValue<out Result> {
-	
+
 	"The given observer will be invoked on completion of the computation.
 	 Many observers can be added.
-	 
+
 	 Returns a [[ObserverId]] which may be used to stop observing."
 	shared formal ObserverId onCompletion(Anything(Result|Exception) listener);
 
@@ -60,25 +62,26 @@ shared interface AsyncHasValue<out Result> {
 see(`class WritableOncePromise<Result>`)
 shared abstract class Observable<Result>(
 	{<ObserverId->Anything(Result|Exception)>*} withObservers = {}) {
-	
-	value waitingNotify = HashMap<ObserverId, Anything(Result|Exception)>(withObservers);
-	
+
+	value waitingNotify = HashMap<ObserverId, Anything(Result|Exception)>(unlinked,
+		Hashtable{ initialCapacity = 4; }, withObservers);
+
 	"A Sync which may be used to synchronize access the observers."
 	shared Sync observersSync = Sync();
-	
+
 	"The observers observing this. For performance reasons, the returned map is
 	 a read-only view of the internal map, not a copy."
 	shared Map<ObserverId, Anything(Result|Exception)> observers = waitingNotify;
-	
+
 	"Observe this Observable."
 	shared ObserverId observe(Anything(Result|Exception) listener) {
 		value observerId = ObserverIdImpl();
 		observersSync.syncExec(() => waitingNotify.put(observerId, listener));
 		return observerId;
 	}
-	
+
 	"Ensure the observer with the given ID is unregistered.
-	 
+
 	 Returns true if and only if the observer was actually listening prior to this.
 	 Notice that a write-only implementation might simply notify an Observer when it's added
 	 without necessarily adding it to its internal map as that would be unnecessary. Removing
@@ -86,13 +89,13 @@ shared abstract class Observable<Result>(
 	shared Boolean stopObserving(ObserverId observerId) {
 		return observersSync.syncExec(() => waitingNotify.remove(observerId) exists);
 	}
-	
+
 }
 
 "A Promise represents the future result of a computation which may or may not
  ever complete, and may complete successfully or fail."
 shared interface Promise<out Result>
-		satisfies HasValue<Result> & AsyncHasValue<Result> {} 
+		satisfies HasValue<Result> & AsyncHasValue<Result> {}
 
 "A Writable version of [[Promise]]. The Result of a computation should be set only once.
  Trying to set the Result more than once will result in an [[Exception]] being thrown."
@@ -100,19 +103,19 @@ shared class WritableOncePromise<Result>(
 	{<ObserverId->Anything(Result|Exception)>*} withListeners = {})
 		extends Observable<Result>(withListeners)
 		satisfies Promise<Result> & AcceptsValue<Result> {
-	
+
 	variable Result|Exception|NoValue result = noValue;
 	value setterCount = AtomicInteger(0);
-	
+
 	shared Integer attemptsToSet => setterCount.get();
-	
+
 	void setResultAndInformObservers(Result|Exception resultToSet) {
 		this.result = resultToSet;
 		for (observer in observers.values) {
 			observer(resultToSet);
 		}
 	}
-	
+
 	"Set the result of the computation. This method can be called only once,
 	 an Exception is thrown otherwise."
 	shared actual void set(Result|Exception resultToSet) {
@@ -122,11 +125,11 @@ shared class WritableOncePromise<Result>(
 			throw ForbiddenInvokationException("The value of this WritableOncePromise has already been set");
 		}
 	}
-	
+
 	shared actual Result|Exception|NoValue getOrNoValue() {
 		return result;
 	}
-	
+
 	ObserverId addOrJustInformObserver(Anything(Result|Exception) observer) {
 		value currentResult = result;
 		if (is NoValue currentResult) {
@@ -138,7 +141,7 @@ shared class WritableOncePromise<Result>(
 		}
 		throw;
 	}
-	
+
 	shared actual ObserverId onCompletion(Anything(Result|Exception) observer) {
 		return observersSync.syncExec(() => addOrJustInformObserver(observer));
 	}

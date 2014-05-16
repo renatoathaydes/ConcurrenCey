@@ -1,9 +1,9 @@
 import java.util.concurrent.locks {
-	ReentrantLock
+    ReentrantLock
 }
 
 
-shared class IdException(shared Integer id, shared actual Exception cause)
+shared class IdException(shared Integer id, Exception cause)
 		extends Exception("Exception with ID=``id``", cause) {}
 
 shared class TimeoutException(shared actual String message = "")

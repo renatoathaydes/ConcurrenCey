@@ -1,16 +1,16 @@
 import ceylon.collection {
-	HashMap
+    HashMap
 }
 import ceylon.time {
-	now,
-	Duration
+    now,
+    Duration
 }
 
 import concurrencey {
-	Scheduler
+    Scheduler
 }
 import concurrencey.actor {
-	Actor
+    Actor
 }
 
 abstract class Side(shared Integer index) of left | right {}
@@ -224,29 +224,34 @@ shared void runPhilosophers() {
 	
 	variable Boolean done = false;
 	while (!done) {
-		value commands = process.readLine()
-				.trim((Character c) => ' ' == c)
-				.lowercased
-				.split();
-		if (exists action = commands.first, action in orders,
-		exists to = commands.rest.first, ! is Null initial = to.first) {
-			if (initial.lowercased == 'w') {
-				waiterCommand(action, waiter);
-			} else if (exists philosopher = philosophers.find((Philosopher p) =>
+		value line = process.readLine();
+		if (exists line) {
+			value commands = line
+					.trim((Character c) => ' ' == c)
+					.lowercased
+					.split();
+			if (exists action = commands.first, action in orders,
+				exists to = commands.rest.first, ! is Null initial = to.first) {
+				if (initial.lowercased == 'w') {
+					waiterCommand(action, waiter);
+				} else if (exists philosopher = philosophers.find((Philosopher p) =>
 					initial == (p.name.lowercased.first else ' '))) {
-				philosopherCommand(action, philosopher);
+					philosopherCommand(action, philosopher);
+				} else {
+					print("Philosopher ``to`` does not exist, choose from: ``philosophers*.name``");
+				}
+			} else if (exists action = commands.first, action == "quit") {
+				done = true;
 			} else {
-				print("Philosopher ``to`` does not exist, choose from: ``philosophers*.name``");
+				print("Enter a command: ``orders`` + philosopher's initial");
 			}
-		} else if (exists action = commands.first, action == "quit") {
-			done = true;
+			
+			if (!done) {
+				scheduler.schedule([now().plus(Duration(1000))], () => print(prettify(table)));
+			}
 		} else {
-			print("Enter a command: ``orders`` + philosopher's initial");
-		}
-		
-		if (!done) {
-			scheduler.schedule([now().plus(Duration(1000))], () => print(prettify(table)));
-		}
+			done = true;
+		} 
 		
 	}
 	

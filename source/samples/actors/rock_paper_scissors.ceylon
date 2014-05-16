@@ -1,15 +1,15 @@
 import concurrencey {
-	Lane,
-	Scheduler,
-	ScheduledTask
+    Lane,
+    Scheduler,
+    ScheduledTask
 }
 import concurrencey.actor {
-	Sender,
-	Actor
+    Sender,
+    Actor
 }
 
 import java.util {
-	Random
+    Random
 }
 
 abstract class Move()
@@ -55,6 +55,7 @@ class HumanPlayer() extends Actor<Play|Restart>(Lane("human-lane")) {
 	
 	void play(Sender<Move> sender) {
 		value move = process.readLine();
+		assert(exists move);
 		switch(move.lowercased)
 		case ("rock") {
 			sender.send(rock);	
@@ -69,6 +70,7 @@ class HumanPlayer() extends Actor<Play|Restart>(Lane("human-lane")) {
 	
 	void restart(Sender<Restart> sender) {
 		value userAnswer = process.readLine();
+		assert(exists userAnswer);
 		sender.send(Restart(sender, userAnswer.lowercased != "stop"));
 	}
 	
@@ -132,8 +134,8 @@ class Coordinator() extends Actor<Restart|Move|WatchTime>() {
 	Sender<Play|Restart> human = HumanPlayer();
 	Sender<Play> computer = ComputerPlayer();
 	Sender<WatchTime> gameTimer = GameTimer(gui);
-	value latestMoves = Array<Move?>({ null, null });
-	value wins = Array({0, 0, 0});
+	value latestMoves = Array<Move?> { null, null };
+	value wins = Array {0, 0, 0};
 	
 	shared void start() {
 		gui.send("Please make your move. Type either 'rock', 'paper' or 'scissors'");
@@ -157,10 +159,10 @@ class Coordinator() extends Actor<Restart|Move|WatchTime>() {
 		} else {
 			if (exists humanWins = referee.isFirstMoveBetter(humanMove, computerMove)) {
 				if (humanWins) {
-					wins.set(0, wins.first + 1);
+					wins.set(0, (wins[0] else 0) + 1);
 					gui.send("You win!");
 				} else {
-					wins.set(1, wins.rest.first + 1);
+					wins.set(1, (wins[1] else 0) + 1);
 					gui.send("You lost, try again!");
 				}
 			} else {

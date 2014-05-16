@@ -5,3 +5,5 @@
 .project
 .classpath
 .settings/*
+/bin
+/.exploded
