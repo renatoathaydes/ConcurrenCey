@@ -3,10 +3,6 @@ import ceylon.collection {
     unlinked,
     Hashtable
 }
-import ceylon.language {
-    shared,
-    formal
-}
 
 import concurrencey.internal {
     idCreator
@@ -59,7 +55,7 @@ shared interface AsyncHasValue<out Result> {
 }
 
 "Base class for Observable values."
-see(`class WritableOncePromise<Result>`)
+see(`class WritableOncePromise`)
 shared abstract class Observable<Result>(
 	{<ObserverId->Anything(Result|Exception)>*} withObservers = {}) {
 
@@ -111,7 +107,7 @@ shared class WritableOncePromise<Result>(
 
 	void setResultAndInformObservers(Result|Exception resultToSet) {
 		this.result = resultToSet;
-		for (observer in observers.values) {
+		for (observer in observers.items) {
 			observer(resultToSet);
 		}
 	}

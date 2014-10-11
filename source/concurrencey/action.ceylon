@@ -1,7 +1,3 @@
-import ceylon.language {
-	shared
-}
-
 import concurrencey.internal {
 	runSoonest
 }

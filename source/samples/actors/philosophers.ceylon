@@ -177,6 +177,8 @@ class Philosopher(shared String name, shared Integer index)
 			waiter.send(fork);
 		}
 	}
+
+	string => name;
 	
 	void onTalk() {
 		function forkAsString(Fork|Waiting? fork) =>
@@ -190,7 +192,6 @@ class Philosopher(shared String name, shared Integer index)
 		print("``name `` is ``state``");
 	}
 	
-	string => name;
 	
 }
 

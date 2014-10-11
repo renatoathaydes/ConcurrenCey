@@ -4,10 +4,11 @@ class FunctionsTest() {
 
 	shared test void runWithTimerTest() {
 		value result1 = withTimer(() => sleep(50));
-		assert(50 <= result1.first < 80);
+		assert(50 <= result1.first);
+		assert(result1.first < 80);
 		value result2 = withTimer(() => "Hej");
 		assert(result2[1] == "Hej");
-		assert(0 <= result2.first < 25);
+		assert(0 <= result2.first, result2.first < 25); // 3-way comparison not working due to bug
 	}
 	
 	shared test void testWaitUntilWithSuccess() {

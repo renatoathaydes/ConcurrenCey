@@ -30,7 +30,7 @@ import java.util.concurrent.atomic {
 
 alias LaneWaiters => HashMap<Lane, [Sync, MutableList<Lane>]>;
 
-JMap<String, OnDemandThread?> threads = Collections.synchronizedMap(JHMap<String, OnDemandThread?>());
+JMap<String, OnDemandThread> threads = Collections.synchronizedMap(JHMap<String, OnDemandThread>());
 
 JList<Lane> busyLanes = Collections.synchronizedList(ArrayList<Lane>());
 
@@ -127,7 +127,7 @@ shared Boolean isActive(Lane lane) {
 
 shared Lane? currentLane() {
 	Thread currentThread = Thread.currentThread();
-	value onDemandThread = threads.get(currentThread.name);
+	OnDemandThread? onDemandThread = threads.get(currentThread.name);
 	if (exists onDemandThread, onDemandThread.thread === currentThread) {
 		return onDemandThread.lane;
 	}

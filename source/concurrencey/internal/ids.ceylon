@@ -1,16 +1,11 @@
-import ceylon.language {
-	shared,
-	abstract
-}
-
 import java.util.concurrent.atomic {
-	AtomicInteger
+	AtomicLong
 }
 
 
 shared abstract class IdCreator() of idCreator {
 	
-	value idCounter = AtomicInteger(-1P);
+	value idCounter = AtomicLong(-1P);
 	
 	shared Integer createId() {
 		return idCounter.incrementAndGet();

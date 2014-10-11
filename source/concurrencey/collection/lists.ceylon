@@ -1,9 +1,7 @@
 import ceylon.collection {
     MutableList,
-    LinkedList
-}
-import ceylon.test {
-    equalsCompare
+    LinkedList,
+    HashSet
 }
 
 import concurrencey {
@@ -30,11 +28,30 @@ shared class ObservableLinkedList<Element>({Element*} initialElements = {})
 		satisfies MutableList<Element>
         given Element satisfies Object {
 
-    value list = LinkedList(initialElements);
+    LinkedList<Element> list = LinkedList(initialElements);
 
     void informObservers(ListEvent<Element> event) {
-		for (observer in super.observers.values) {
+		for (Anything(ListEvent<Element>|Exception) observer in super.observers.items) {
 			observer(event);
+		}
+	}
+	
+	void internalRemoveAll({Element*} elements) {
+		HashSet<Element> toRemove = HashSet { elements = elements; };
+		LinkedList<Integer> indexes = LinkedList<Integer>();
+		LinkedList<Element> values = LinkedList<Element>();
+		
+		variable Integer index = 0;
+		for (Element item in list) {
+			if (item in toRemove) {
+				indexes.add(index);
+				values.add(item);
+			}
+			index++;
+		}
+		if (nonempty removedIndexes = indexes.sequence(), nonempty removed = values.sequence()) {
+			list.removeAll(elements);
+			informObservers(RemoveEvent(removedIndexes, removed));
 		}
 	}
 
@@ -44,18 +61,18 @@ shared class ObservableLinkedList<Element>({Element*} initialElements = {})
 	}
 
 	shared actual void addAll({Element*} values) {
-		if (nonempty items = values.sequence) {
-			value previousSize = list.size;
+		if (nonempty items = values.sequence()) {
+			Integer previousSize = list.size;
 			list.addAll(values);
-			value indexes = (previousSize..(list.size-1)).sequence;
+			[Integer+] indexes = (previousSize..(list.size-1)).sequence();
 			informObservers(AddEvent(indexes, items));
 		}
 	}
 
 	shared actual void clear() {
-		if (!list.empty, nonempty items = list.sequence) {
+		if (!list.empty, nonempty items = list.sequence()) {
 			list.clear();
-			value indexes = (0..(items.size-1)).sequence;
+			[Integer+] indexes = (0..(items.size-1)).sequence();
 			informObservers(RemoveEvent(indexes, items));
 		}
 	}
@@ -66,20 +83,7 @@ shared class ObservableLinkedList<Element>({Element*} initialElements = {})
 	}
 
 	shared actual void remove(Element val) {
-		value indexes = LinkedList<Integer>();
-		variable Integer index = 0;
-		for (item in list) { // do not use entries(list) as it removes nulls
-			if (equalsCompare(val, item)) {
-				indexes.add(index);
-			}
-			index++;
-		}
-		if (nonempty removedIndexes = indexes.sequence) {
-			list.remove(val);
-			value removedValues = [val].repeat(removedIndexes.size);
-			assert(nonempty removedValues);
-			informObservers(RemoveEvent(removedIndexes, removedValues));
-		}
+		internalRemoveAll({val});
 	}
 
 	shared actual void set(Integer index, Element val) {
@@ -92,12 +96,6 @@ shared class ObservableLinkedList<Element>({Element*} initialElements = {})
 	rest => list.rest;
 
 	reversed => list.reversed;
-
-	segment(Integer from, Integer length) => list.segment(from, length);
-
-	clone() => ObservableLinkedList(list);
-
-	get(Integer index) => list.get(index);
 
 	span(Integer from, Integer to) => span(from, to);
 
@@ -117,42 +115,91 @@ shared class ObservableLinkedList<Element>({Element*} initialElements = {})
 		return removed;
 	}
 
-	shared actual void deleteSegment(Integer from, Integer length) {
-		if (from < size && length > 0) {
-			value lastIndex = min({size, from + length}) - 1;
-			value indexes = from..lastIndex;
-			value elements = list[from..lastIndex].sequence;
-			assert(is [Element+] elements);
-			list.deleteSegment(from, length);
-			informObservers(RemoveEvent(indexes, elements));
+	shared actual void deleteSpan(Integer from, Integer to) {
+		deleteMeasure(from, to + 1 - from);
+	}
+
+	shared actual void infill(Element replacement) {
+		// nulls are not allowed
+	}
+
+	shared actual void prune() {
+		// nulls are not allowed
+	}
+
+	shared actual void removeAll({Element*} elements) {
+		internalRemoveAll(elements);
+	}
+
+	shared actual Boolean removeFirst(Element element) {
+		Boolean removed = list.removeFirst(element);
+		if (removed) {
+			informObservers(RemoveEvent([0], [element]));
+		}
+		return removed;
+	}
+
+	shared actual Boolean removeLast(Element element) {
+		Boolean removed = list.removeLast(element);
+		if (removed) {
+			informObservers(RemoveEvent([list.size], [element]));
+		}
+		return removed;
+	}
+	shared actual void replace(Element element, Element replacement) {
+		LinkedList<Integer> indexes = LinkedList<Integer>();
+		for (index -> item in zipEntries((0..list.size), list)) {
+			if (item == element) {
+				indexes.add(index);
+			}
+		}
+		list.replace(element, replacement);
+		for (Integer index in indexes) {
+			informObservers(ReplaceEvent(index, replacement));
 		}
 	}
 
-	shared actual void deleteSpan(Integer from, Integer to) {
-		deleteSegment(from, to + 1 - from);
+	shared actual Boolean replaceFirst(Element element, Element replacement) {
+		Boolean replaced = list.replaceFirst(element, replacement);
+		if (replaced) {
+			informObservers(ReplaceEvent(0, replacement));
+		}
+		return replaced;
 	}
 
-    //FIXME the following methods may modify the list without informing observers
-
-	infill(Element replacement) => list.infill(replacement);
-
-	prune() => list.prune();
-
-	removeAll({Element*} elements) => list.removeAll(elements);
-
-	removeFirst(Element element) => list.removeFirst(element);
-
-	shared actual Boolean removeLast(Element element) => list.removeLast(element);
-
-	shared actual void replace(Element element, Element replacement) => list.replace(element, replacement);
-
-	shared actual Boolean replaceFirst(Element element, Element replacement) => list.replaceFirst(element, replacement);
-
-	shared actual Boolean replaceLast(Element element, Element replacement) => list.replaceLast(element, replacement);
+	shared actual Boolean replaceLast(Element element, Element replacement) {
+		Boolean replaced = list.replaceLast(element, replacement);
+		if (replaced) {
+			informObservers(ReplaceEvent(list.size, replacement));
+		}
+		return replaced;
+	}
 
 	shared actual void truncate(Integer size) {
+		Integer initialSize = list.size;
+		List<Element> removedElements = list[size..list.size];
 		list.truncate(size);
+		Integer finalSize = list.size;
+		[Integer+] removedIndexes = (size..(finalSize - initialSize)).sequence();
+		if (is [Element+] removedElements)  {
+		  informObservers(RemoveEvent(removedIndexes, removedElements));	
+		}
 	}
+	
+	shared actual void deleteMeasure(Integer from, Integer length) {
+		List<Element> elementsToRemove = list[from:length].sequence();
+		if (is [Element+] elementsToRemove) {
+			list.deleteMeasure(from, elementsToRemove.size);
+			Range<Integer> removedIndexes = (from..(from + elementsToRemove.size - 1));
+			informObservers(RemoveEvent(removedIndexes, elementsToRemove));	
+		}
+	}
+	
+	getFromFirst(Integer index) => list.getFromFirst(index);
+	
+	clone() => ObservableLinkedList(list);
+	
+	
 
 
 }

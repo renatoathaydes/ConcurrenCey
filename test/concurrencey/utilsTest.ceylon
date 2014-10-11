@@ -25,7 +25,7 @@ class SyncTest() {
 		value endTime = system.milliseconds;
 		
 		assertEquals(resource.size, 1000);
-		assert(resource.every((Integer t) => startTime < t < endTime));
+		assert(resource.every((Integer t) => startTime <= t <= endTime));
 	}
 	
 }

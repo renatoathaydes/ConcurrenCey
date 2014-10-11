@@ -26,7 +26,8 @@ class ActionRunnerTest() {
 
 		value time_result = withTimer(runAll);
 
-		assert(3 * sleepTime <= time_result.first < 4 * sleepTime);
+		assert(3 * sleepTime <= time_result.first);
+		assert(time_result.first < 4 * sleepTime);
 		value results = time_result[1];
 		assertEquals(results, [ "A", "B", "C" ]);
 	}
@@ -60,7 +61,8 @@ class ActionRunnerTest() {
 
 		value time_result = withTimer(runAll);
 
-		assert(sleepTime <= time_result.first < 2 * sleepTime);
+		assert(sleepTime <= time_result.first);
+		assert(time_result.first < 2 * sleepTime);
 		value results = time_result[1];
 		assertEquals(results, [ "A", "B", "C", "D", 1, 2, 3 ]);
 	}
@@ -78,9 +80,11 @@ class ActionRunnerTest() {
 		}
 
 		value time_result = withTimer(runAll);
-		print("Time was ``time_result.first``");
+		value time = time_result.first;
+		print("Time was ``time``");
 
-		assert(2 * sleepTime <= time_result.first < 3 * sleepTime);
+		assert(2 * sleepTime <= time_result.first);
+		assert(time_result.first < 3 * sleepTime);
 		value results = time_result[1];
 		assertEquals(results, [ "A", "B", "C", "D" ]);
 	}

@@ -1,13 +1,7 @@
 import ceylon.collection {
     LinkedList
 }
-import ceylon.language {
-    shared,
-    default,
-    variable,
-    formal,
-    actual
-}
+
 import ceylon.time {
     Duration
 }
@@ -56,7 +50,7 @@ shared abstract class ActionRunner() {
 
 		void captureResult([Integer, Element]|Exception result) {
 			if (is [Integer, Element] result) {
-				collector.set(result.first, result[1]);
+				collector.set(result[0], result[1]);
 			} else if (is IdException result) {
 				collector.set(result.id, result);
 			}
@@ -71,14 +65,14 @@ shared abstract class ActionRunner() {
 			}
 		}
 
-		for (id -> act in entries(actions)) {
-			run(IdAction(id, () => delegateAct(id, act)))
+		for (entry in zipEntries(0..actions.size, actions)) {
+			run(IdAction(entry.key, () => delegateAct(entry.key, entry.item)))
 					.onCompletion(captureResult);
 		}
 
 		latch.await();
 
-		return collector.coalesced.sequence;
+		return collector.coalesced.sequence();
 	}
 
 	"Runs the given [[Action]], possibly in parallel, and block until it has completed,

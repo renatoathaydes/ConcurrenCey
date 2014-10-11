@@ -113,19 +113,19 @@ class ObservableLinkedListTest() {
 		assertEquals(count, 0);
 	}
 
-	shared test void observerNotifiedOnDeleteSegment() {
+	shared test void observerNotifiedOnDeleteMeasure() {
 		list.addAll({"A", "B", "C", "D", "E", "F"});
 		variable ListEvent<String>|Exception result = Exception();
 		list.observe((ListEvent<String>|Exception e) => result = e);
 
-		list.deleteSegment(2, 3);
+		list.deleteMeasure(2, 3);
 
 		assert(is RemoveEvent<String> final = result);
 		assertEquals(final.indexes, 2..4);
 		assertEquals(final.elements, ["C", "D", "E"]);
 		assertEquals(list, ["A", "B", "F"]);
 
-		list.deleteSegment(1, 5);
+		list.deleteMeasure(1, 5);
 
 		assert(is RemoveEvent<String> final2 = result);
 		assertEquals(final2.indexes, [1, 2]);
@@ -133,12 +133,12 @@ class ObservableLinkedListTest() {
 		assertEquals(list, ["A"]);
 	}
 
-	shared test void notNotifiedWhenDeleteSegmentDoesNotModifyList() {
+	shared test void notNotifiedWhenDeleteMeasureDoesNotModifyList() {
 		list.addAll({"A", "B", "C", "D", "E"});
 		variable ListEvent<String>|Exception result = Exception();
 		list.observe((ListEvent<String>|Exception e) => result = e);
 
-		list.deleteSegment(10, 3);
+		list.deleteMeasure(10, 3);
 
 		assert(is Exception final = result);
 		assertEquals(list, ["A", "B", "C", "D", "E"]);
@@ -159,7 +159,7 @@ class ObservableLinkedListTest() {
 
 	shared test void linkedListTests() {
 		value l = LinkedList({ "A", "B", "C", "D", "E", "F", "G"});
-		l.deleteSegment(2, 3);
+		l.deleteMeasure(2, 3);
 		assertEquals(l, LinkedList({"A", "B", "F", "G"}));
 	}
 
