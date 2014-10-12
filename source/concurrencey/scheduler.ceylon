@@ -53,7 +53,7 @@ shared class Scheduler(
 	 Instants which are already in the past are treated as being the current
 	 Instant."
 	throws(`class ForbiddenInvokationException`, "if this Scheduler has been shut-down")
-	shared ScheduledTask schedule([Instant+] instants, void action()) {
+	shared ScheduledTask schedule([Instant+] instants, Anything action()) {
 		value timerTask = task(action);
 		for (instant in instants) {
 			value delay = instant.millisecondsOfEpoch - system.milliseconds;

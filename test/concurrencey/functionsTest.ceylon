@@ -29,29 +29,5 @@ class FunctionsTest() {
 		assertThatException(() => waitUntil(() => false, 25, 5))
 				.hasType(`TimeoutException`);
 	}
-	
-	shared test void testEquivalent() {
-		assert(equivalent(1, 1));
-		assert(equivalent(null, null));
-		assert(equivalent("Hi", "Hi"));
-		assert(equivalent({1, 2, 3}, {1, 2, 3}));
-		assert(equivalent({1, 2, null, 3}, {1, 2, null, 3}));
-		assert(equivalent({null}, {null}));
-		assert(equivalent(Array({1,2}), Array({1,2})));
-		assert(equivalent(Array({null,null}), Array({null,null})));
-		assert(equivalent({{null}, {null}}, {{null},{null}}));
 		
-		assert(!equivalent(1, 2));
-		assert(!equivalent(null, 1));
-		assert(!equivalent(1, null));
-		assert(!equivalent("Hi", "Ho"));
-		assert(!equivalent({1, 2}, {1, 2, 3}));
-		assert(!equivalent({1, 2, null, 3}, {1, 2, 3, null}));
-		assert(!equivalent({null}, {}));
-		assert(!equivalent({null}, {"null"}));
-		assert(!equivalent({{null}, {null}}, {{null}}));
-		assert(!equivalent(Array({1,2}), Array({1,2, 3})));
-		assert(!equivalent(Array({null,null}), Array({null})));
-	}
-	
 }

@@ -1,5 +1,6 @@
 import ceylon.test {
-	test, beforeTest, assertThatException
+	test, beforeTest, assertThatException,
+    assertTrue
 }
 import ceylon.time {
 	now,
@@ -57,7 +58,8 @@ class SchedulerTest() {
 			value actualTime = promise.getOrNoValue();
 			value expectedDelay = expectedDelays.next();
 			assert(is Integer actualTime, is Integer expectedDelay);
-			assert(startTime + expectedDelay <= actualTime < startTime + expectedDelay + 25);	
+			assertTrue(startTime + expectedDelay <= actualTime < startTime + expectedDelay + 25,
+			 "Actual time outside of acceptable bounds: ``actualTime``");
 		}
 		
 	}

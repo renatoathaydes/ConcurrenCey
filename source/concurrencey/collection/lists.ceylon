@@ -8,15 +8,19 @@ import concurrencey {
     Observable
 }
 
+"Any event that may modify a list."
 shared abstract class ListEvent<Element>()
 		of AddEvent<Element> | RemoveEvent<Element> | ReplaceEvent<Element> {}
 
+"Event representing the addition of new elements to a List."
 shared class AddEvent<Element>(shared [Integer+] indexes, shared [Element+] elements)
 		extends ListEvent<Element>() {}
 
+"Event representing the removal of elements from a List."
 shared class RemoveEvent<Element>(shared [Integer+] indexes, shared [Element+] elements)
 		extends ListEvent<Element>() {}
 
+"Event representing the replacement of one or more elements of a List."
 shared class ReplaceEvent<Element>(shared Integer index, shared Element element)
 		extends ListEvent<Element>() {}
 

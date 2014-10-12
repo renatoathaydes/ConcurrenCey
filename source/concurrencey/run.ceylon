@@ -1,6 +1,6 @@
 
 
-"Run the module `concurrencey`."
+"Run the module `concurrencey`. This is just an artificial example to show how ConcurrenCey may be used."
 shared void run() {
 	value runner = StrategyActionRunner();
 	
