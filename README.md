@@ -12,7 +12,7 @@ Concurrencey provides low-level as well as higher level concurrency constructs s
 You just need to add this declaration to your Ceylon module:
 
 ```ceylon
-import concurrencey "0.0.1"
+import com.athaydes.concurrencey "0.0.1";
 ```
 
 ## How to use
