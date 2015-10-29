@@ -231,17 +231,17 @@ shared void runPhilosophers() {
 					.trim((Character c) => ' ' == c)
 					.lowercased
 					.split();
-			if (exists action = commands.first, action in orders,
+			if (commands.first in orders,
 				exists to = commands.rest.first, ! is Null initial = to.first) {
 				if (initial.lowercased == 'w') {
-					waiterCommand(action, waiter);
+					waiterCommand(commands.first, waiter);
 				} else if (exists philosopher = philosophers.find((Philosopher p) =>
 					initial == (p.name.lowercased.first else ' '))) {
-					philosopherCommand(action, philosopher);
+					philosopherCommand(commands.first, philosopher);
 				} else {
 					print("Philosopher ``to`` does not exist, choose from: ``philosophers*.name``");
 				}
-			} else if (exists action = commands.first, action == "quit") {
+			} else if (commands.first == "quit") {
 				done = true;
 			} else {
 				print("Enter a command: ``orders`` + philosopher's initial");

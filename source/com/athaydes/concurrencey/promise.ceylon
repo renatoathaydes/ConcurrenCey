@@ -133,11 +133,8 @@ shared class WritableOncePromise<Result>(
 		if (is NoValue currentResult) {
 			return observe(observer);
 		}
-		if (is Result|Exception currentResult) {
-			observer(currentResult);
-			return ObserverIdImpl();
-		}
-		throw;
+		observer(currentResult);
+		return ObserverIdImpl();
 	}
 
 	shared actual ObserverId onCompletion(Anything(Result|Exception) observer) {

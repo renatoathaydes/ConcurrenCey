@@ -46,7 +46,7 @@ shared class ObservableLinkedList<Element>({Element*} initialElements = {})
 		}
 	}
 	
-	void internalRemoveAll({Element*} elements) {
+	Integer internalRemoveAll({Element*} elements) {
 		HashSet<Element> toRemove = HashSet { elements = elements; };
 		LinkedList<Integer> indexes = LinkedList<Integer>();
 		LinkedList<Element> values = LinkedList<Element>();
@@ -59,10 +59,12 @@ shared class ObservableLinkedList<Element>({Element*} initialElements = {})
 			}
 			index++;
 		}
+		variable Integer removedCount = 0;
 		if (nonempty removedIndexes = indexes.sequence(), nonempty removed = values.sequence()) {
-			list.removeAll(elements);
+			removedCount += list.removeAll(elements);
 			informObservers(RemoveEvent(removedIndexes, removed));
 		}
+		return removedCount;
 	}
 
 	shared actual void add(Element val) {
@@ -92,8 +94,8 @@ shared class ObservableLinkedList<Element>({Element*} initialElements = {})
 		informObservers(AddEvent([index], [val]));
 	}
 
-	shared actual void remove(Element val) {
-		internalRemoveAll({val});
+	shared actual Integer remove(Element val) {
+		return internalRemoveAll({val});
 	}
 
 	shared actual void set(Integer index, Element val) {
@@ -137,8 +139,8 @@ shared class ObservableLinkedList<Element>({Element*} initialElements = {})
 		// nulls are not allowed
 	}
 
-	shared actual void removeAll({Element*} elements) {
-		internalRemoveAll(elements);
+	shared actual Integer removeAll({Element*} elements) {
+		return internalRemoveAll(elements);
 	}
 
 	shared actual Boolean removeFirst(Element element) {

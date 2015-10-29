@@ -29,7 +29,6 @@ shared [Integer, Result] withTimer<Result>(Result()|Action<Result> act) {
 		result = act();
 		endTime = system.milliseconds;
 	} else {
-		assert(is Action<Result> act);
 		startTime = system.milliseconds;
 		result = act.syncRun();
 		endTime = system.milliseconds;
