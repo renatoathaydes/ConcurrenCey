@@ -228,11 +228,12 @@ shared void runPhilosophers() {
 		value line = process.readLine();
 		if (exists line) {
 			value commands = line
-					.trim((Character c) => ' ' == c)
+					.trim(' '.equals)
 					.lowercased
 					.split();
-			if (commands.first in orders,
-				exists to = commands.rest.first, ! is Null initial = to.first) {
+			if (orders.contains(commands.first),
+				exists to = commands.rest.first,
+				exists initial = to.first) {
 				if (initial.lowercased == 'w') {
 					waiterCommand(commands.first, waiter);
 				} else if (exists philosopher = philosophers.find((Philosopher p) =>
